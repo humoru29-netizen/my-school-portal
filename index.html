@@ -191,8 +191,14 @@
   }
   .list-item .top-row{display:flex;justify-content:space-between;font-weight:bold;color:var(--maroon);}
   .list-item .sub-row{color:#8a7d68;font-size:12px;margin-top:2px;}
-</style>
-</head>
+  .grid-tools{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
+  .grid-card{
+    background:#fff;border:1px solid #e5dcc8;border-radius:12px;
+    padding:18px 10px;text-align:center;cursor:pointer;
+  }
+  .grid-card .icon{font-size:26px;margin-bottom:8px;}
+  .grid-card .label{font-weight:bold;color:var(--maroon);font-size:14px;}
+</style></head>
 <body>
 
 <!-- ===================== LOGIN SCREEN ===================== -->
@@ -237,12 +243,17 @@
   </div>
 
   <div class="content">
-    <div class="quick-actions">
-      <button class="qa-btn primary" onclick="openModal('resultsModal')">📄 &nbsp; Generate Results</button>
-      <button class="qa-btn gold" onclick="openModal('studentModal')">➕ &nbsp; Add Student</button>
-      <button class="qa-btn" onclick="openModal('noticeModal')">📣 &nbsp; Post Notice</button>
-      <button class="qa-btn" onclick="openModal('paymentModal')">➕ &nbsp; Record Payment</button>
-      <button class="qa-btn" onclick="exportReport()">⬇️ &nbsp; Export Report</button>
+    <div class="grid-tools">
+      <div class="grid-card" onclick="openModal('studentModal')"><div class="icon">➕</div><div class="label">Add Student</div></div>
+      <div class="grid-card" onclick="openModal('accountsModal')"><div class="icon">📁</div><div class="label">Manage Accounts</div></div>
+      <div class="grid-card" onclick="openModal('resultsModal')"><div class="icon">📄</div><div class="label">Generate Results</div></div>
+      <div class="grid-card" onclick="openModal('feeRecordsModal')"><div class="icon">🧾</div><div class="label">Fee Records</div></div>
+      <div class="grid-card" onclick="openModal('noticeModal')"><div class="icon">📣</div><div class="label">Announcements</div></div>
+      <div class="grid-card" onclick="openModal('caListModal')"><div class="icon">📋</div><div class="label">CA List</div></div>
+      <div class="grid-card" onclick="openModal('reportCardModal')"><div class="icon">📃</div><div class="label">Report Cards</div></div>
+      <div class="grid-card" onclick="openModal('masterListModal')"><div class="icon">📊</div><div class="label">Master List</div></div>
+      <div class="grid-card" onclick="openModal('classesModal')"><div class="icon">🏫</div><div class="label">Classes &amp; Subjects</div></div>
+      <div class="grid-card" onclick="exportReport()"><div class="icon">⬇️</div><div class="label">Export Report</div></div>
     </div>
 
     <div id="noticesList"></div>
@@ -468,6 +479,111 @@
   </div>
 </div>
 
+<!-- ===================== MANAGE ACCOUNTS MODAL ===================== -->
+<div class="modal-overlay" id="accountsModal">
+  <div class="modal-box">
+    <h3>📁 Manage Accounts</h3>
+    <div id="accountsMsg" class="modal-msg"></div>
+    <div id="accountsList" style="max-height:60vh;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('accountsModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CLASSES & SUBJECTS MODAL ===================== -->
+<div class="modal-overlay" id="classesModal">
+  <div class="modal-box">
+    <h3>🏫 Classes &amp; Subjects</h3>
+    <label>Class Name</label>
+    <input id="clsName" type="text" placeholder="e.g. JSS1 or Primary 3">
+    <label>Level</label>
+    <select id="clsLevel">
+      <option value="nursery">Nursery</option>
+      <option value="primary">Primary</option>
+      <option value="secondary">Secondary</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('classesModal')">Close</button>
+      <button class="btn-submit" onclick="addClass()">Add Class</button>
+    </div>
+    <div id="classesMsg" class="modal-msg"></div>
+    <hr style="margin:14px 0;border:none;border-top:1px solid #eee2cc;">
+    <label>Subject Name</label>
+    <input id="subName" type="text" placeholder="e.g. Mathematics">
+    <label>Level</label>
+    <select id="subLevel">
+      <option value="nursery">Nursery</option>
+      <option value="primary">Primary</option>
+      <option value="secondary">Secondary</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn-submit" style="flex:1;" onclick="addSubject()">Add Subject</button>
+    </div>
+    <div id="subjectsMsg" class="modal-msg"></div>
+    <h4 style="color:var(--maroon);margin-top:16px;">Existing Classes</h4>
+    <div id="classesList"></div>
+    <h4 style="color:var(--maroon);margin-top:16px;">Existing Subjects</h4>
+    <div id="subjectsList"></div>
+  </div>
+</div>
+
+<!-- ===================== FEE RECORDS MODAL ===================== -->
+<div class="modal-overlay" id="feeRecordsModal">
+  <div class="modal-box">
+    <h3>🧾 Fee Records</h3>
+    <div class="stat-card" style="margin-bottom:12px;">
+      <div class="label">Total Collected</div>
+      <div class="big" id="feeRecordsTotal">₦0</div>
+    </div>
+    <div id="feeRecordsList" style="max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('feeRecordsModal')">Close</button>
+      <button class="btn-submit" onclick="openModal('paymentModal')">Record Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== CA LIST MODAL ===================== -->
+<div class="modal-overlay" id="caListModal">
+  <div class="modal-box">
+    <h3>📋 CA List (Blank Score Sheet)</h3>
+    <label>Class</label>
+    <select id="caClassSelect"><option value="">Select class...</option></select>
+    <button class="btn-submit" style="margin-top:10px;" onclick="loadCaList()">Load Students</button>
+    <div id="caListMsg" class="modal-msg"></div>
+    <div id="caListContainer" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- ===================== REPORT CARD MODAL ===================== -->
+<div class="modal-overlay" id="reportCardModal">
+  <div class="modal-box">
+    <h3>📃 Report Card</h3>
+    <label>Student</label>
+    <select id="reportCardSelect"><option value="">Select student...</option></select>
+    <button class="btn-submit" style="margin-top:10px;" onclick="loadReportCard()">Generate</button>
+    <div id="reportCardContainer" style="margin-top:12px;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('reportCardModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MASTER LIST MODAL ===================== -->
+<div class="modal-overlay" id="masterListModal">
+  <div class="modal-box">
+    <h3>📊 Master List (Broadsheet)</h3>
+    <label>Class</label>
+    <select id="masterClassSelect"><option value="">Select class...</option></select>
+    <button class="btn-submit" style="margin-top:10px;" onclick="loadMasterList()">Generate</button>
+    <div id="masterListContainer" style="margin-top:12px;overflow-x:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('masterListModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ============ FIREBASE CONFIG ============
   // 1. Go to console.firebase.google.com
@@ -649,6 +765,10 @@
         loadStudentCounts();
         loadNotices();
         populateStudentDropdowns();
+        populateClassDropdowns();
+        loadClassesAndSubjects();
+        loadAccountsList();
+        loadFeeRecords();
         if(currentRole === 'general_admin'){
           loadPendingApprovals();
         }
@@ -815,6 +935,8 @@
       });
       document.getElementById('paySelect').innerHTML = options.join('');
       document.getElementById('resSelect').innerHTML = options.join('');
+      const rcSelect = document.getElementById('reportCardSelect');
+      if(rcSelect) rcSelect.innerHTML = options.join('');
     });
   }
 
@@ -1028,6 +1150,219 @@
     }).catch(function(err){
       alert('Export failed: ' + err.message);
     });
+  }
+
+  // ============ CLASSES & SUBJECTS ============
+  function addClass(){
+    const name = document.getElementById('clsName').value.trim();
+    const level = document.getElementById('clsLevel').value;
+    if(!name){ showMsg('classesMsg', 'Enter a class name.', true); return; }
+    db.collection('classes').add({name:name, level:level}).then(function(){
+      showMsg('classesMsg', 'Class added!', false);
+      document.getElementById('clsName').value = '';
+      loadClassesAndSubjects();
+      populateClassDropdowns();
+    }).catch(function(err){ showMsg('classesMsg', err.message, true); });
+  }
+
+  function addSubject(){
+    const name = document.getElementById('subName').value.trim();
+    const level = document.getElementById('subLevel').value;
+    if(!name){ showMsg('subjectsMsg', 'Enter a subject name.', true); return; }
+    db.collection('subjects').add({name:name, level:level}).then(function(){
+      showMsg('subjectsMsg', 'Subject added!', false);
+      document.getElementById('subName').value = '';
+      loadClassesAndSubjects();
+    }).catch(function(err){ showMsg('subjectsMsg', err.message, true); });
+  }
+
+  function loadClassesAndSubjects(){
+    db.collection('classes').get().then(function(snap){
+      let html = '';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        html += '<div class="list-item"><div class="top-row">'+e(d.name)+'</div><div class="sub-row">'+e(d.level)+'</div></div>';
+      });
+      document.getElementById('classesList').innerHTML = html || '<p style="color:#8a7d68;font-size:13px;">No classes yet.</p>';
+    });
+    db.collection('subjects').get().then(function(snap){
+      let html = '';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        html += '<div class="list-item"><div class="top-row">'+e(d.name)+'</div><div class="sub-row">'+e(d.level)+'</div></div>';
+      });
+      document.getElementById('subjectsList').innerHTML = html || '<p style="color:#8a7d68;font-size:13px;">No subjects yet.</p>';
+    });
+  }
+
+  function populateClassDropdowns(){
+    db.collection('classes').get().then(function(snap){
+      const opts = ['<option value="">Select class...</option>'];
+      snap.forEach(function(doc){
+        const d = doc.data();
+        opts.push('<option value="'+e(d.name)+'">'+e(d.name)+' ('+e(d.level)+')</option>');
+      });
+      const html = opts.join('');
+      ['caClassSelect','masterClassSelect'].forEach(function(id){
+        const el = document.getElementById(id);
+        if(el) el.innerHTML = html;
+      });
+    });
+  }
+
+  // ============ MANAGE ACCOUNTS ============
+  function loadAccountsList(){
+    db.collection('users').get().then(function(snap){
+      const roleLabels = {
+        general_admin:'General Admin', primary_admin:'Primary Admin',
+        secondary_admin:'Secondary Admin', teacher:'Teacher',
+        cashier:'Cashier', student:'Student', pending:'Pending Approval'
+      };
+      let html = '';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        if(d.role === 'student') return; // students managed via Add Student / class lists
+        html += '<div class="list-item">'
+          + '<div class="top-row"><span>'+e(d.name || d.email || 'Unnamed')+'</span></div>'
+          + '<div class="sub-row">'+e(d.email || '')+' &middot; '+ (roleLabels[d.role] || d.role) +'</div>'
+          + '<div style="display:flex;gap:8px;margin-top:8px;">'
+          + '<select onchange="changeUserRole(\''+doc.id+'\', this.value)" style="flex:1;padding:6px;border-radius:6px;border:1px solid #ddd0b8;">'
+          + ['general_admin','primary_admin','secondary_admin','teacher','cashier'].map(function(r){
+              return '<option value="'+r+'"'+(d.role===r?' selected':'')+'>'+roleLabels[r]+'</option>';
+            }).join('')
+          + '</select>'
+          + '<button onclick="deleteAccount(\''+doc.id+'\')" style="padding:6px 12px;border:none;border-radius:6px;background:#f8d7da;color:#721c24;font-weight:bold;">Delete</button>'
+          + '</div></div>';
+      });
+      document.getElementById('accountsList').innerHTML = html || '<p style="color:#8a7d68;font-size:13px;">No staff accounts yet.</p>';
+    }).catch(function(err){ console.error(err); });
+  }
+
+  function changeUserRole(uid, newRole){
+    db.collection('users').doc(uid).update({role:newRole}).then(function(){
+      showMsg('accountsMsg', 'Role updated.', false);
+    }).catch(function(err){ showMsg('accountsMsg', err.message, true); });
+  }
+
+  function deleteAccount(uid){
+    if(!confirm("Remove this account's access? (This deletes their profile, not their login.)")) return;
+    db.collection('users').doc(uid).delete().then(function(){
+      loadAccountsList();
+    }).catch(function(err){ showMsg('accountsMsg', err.message, true); });
+  }
+
+  // ============ FEE RECORDS ============
+  function loadFeeRecords(){
+    Promise.all([
+      db.collection('payments').orderBy('date','desc').get(),
+      studentsQuery().get()
+    ]).then(function(res){
+      const studentMap = {};
+      res[1].forEach(function(doc){ studentMap[doc.id] = doc.data(); });
+      let total = 0;
+      let html = '';
+      res[0].forEach(function(doc){
+        const d = doc.data();
+        total += (d.amount || 0);
+        const stu = studentMap[d.studentId];
+        const stuName = stu ? stu.name : 'Unknown Student';
+        html += '<div class="list-item"><div class="top-row"><span>'+e(stuName)+'</span><span>₦'+(d.amount||0).toLocaleString()+'</span></div><div class="sub-row">'+e(d.purpose||'Payment')+' &middot; '+e(d.term||'')+'</div></div>';
+      });
+      document.getElementById('feeRecordsTotal').textContent = '₦' + total.toLocaleString();
+      document.getElementById('feeRecordsList').innerHTML = html || '<p style="color:#8a7d68;font-size:13px;">No payments recorded yet.</p>';
+    }).catch(function(err){ console.error(err); });
+  }
+
+  // ============ CA LIST ============
+  function loadCaList(){
+    const className = document.getElementById('caClassSelect').value;
+    if(!className){ showMsg('caListMsg', 'Please select a class.', true); return; }
+    db.collection('users').where('role','==','student').where('className','==',className).get().then(function(snap){
+      if(snap.empty){
+        document.getElementById('caListContainer').innerHTML = '<p style="color:#8a7d68;font-size:13px;">No students in this class yet.</p>';
+        return;
+      }
+      let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Name</th><th style="padding:6px;">CA Score</th></tr>';
+      snap.forEach(function(doc){
+        html += '<tr><td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(doc.data().name)+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;"><input type="number" style="width:60px;padding:4px;" placeholder="0-40"></td></tr>';
+      });
+      html += '</table><p style="font-size:11px;color:#8a7d68;margin-top:8px;">This is a blank scoring sheet for offline/manual use. To save scores into the system, use Generate Results per student.</p>';
+      document.getElementById('caListContainer').innerHTML = html;
+    }).catch(function(err){ showMsg('caListMsg', err.message, true); });
+  }
+
+  // ============ REPORT CARD ============
+  function loadReportCard(){
+    const studentId = document.getElementById('reportCardSelect').value;
+    if(!studentId){ return; }
+    Promise.all([
+      db.collection('users').doc(studentId).get(),
+      db.collection('results').where('studentId','==',studentId).get()
+    ]).then(function(res){
+      const stu = res[0].data();
+      let rows = '';
+      let total = 0, count = 0;
+      res[1].forEach(function(doc){
+        const d = doc.data();
+        rows += '<tr><td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(d.subject)+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.caScore+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.examScore+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.total+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+e(d.grade)+'</td></tr>';
+        total += d.total; count++;
+      });
+      const avg = count > 0 ? (total/count).toFixed(1) : 0;
+      let html = '<h4 style="color:var(--maroon);">'+e(stu.name)+' — '+e(stu.className||'')+'</h4>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+        + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Subject</th><th style="padding:6px;">CA</th><th style="padding:6px;">Exam</th><th style="padding:6px;">Total</th><th style="padding:6px;">Grade</th></tr>'
+        + rows + '</table>'
+        + '<p style="margin-top:10px;font-weight:bold;color:var(--maroon);">Average: '+avg+'</p>';
+      document.getElementById('reportCardContainer').innerHTML = html || '<p>No results yet.</p>';
+    }).catch(function(err){ console.error(err); });
+  }
+
+  // ============ MASTER LIST (BROADSHEET) ============
+  function loadMasterList(){
+    const className = document.getElementById('masterClassSelect').value;
+    if(!className){ return; }
+    db.collection('users').where('role','==','student').where('className','==',className).get().then(function(snap){
+      const studentIds = [];
+      const studentNames = {};
+      snap.forEach(function(doc){ studentIds.push(doc.id); studentNames[doc.id] = doc.data().name; });
+
+      if(studentIds.length === 0){
+        document.getElementById('masterListContainer').innerHTML = '<p style="color:#8a7d68;font-size:13px;">No students in this class.</p>';
+        return;
+      }
+
+      db.collection('results').get().then(function(resSnap){
+        const byStudent = {};
+        resSnap.forEach(function(doc){
+          const d = doc.data();
+          if(studentIds.indexOf(d.studentId) === -1) return;
+          if(!byStudent[d.studentId]) byStudent[d.studentId] = [];
+          byStudent[d.studentId].push(d);
+        });
+
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+          + '<tr style="background:var(--cream);"><th style="padding:6px;">S/N</th><th style="padding:6px;text-align:left;">Name</th><th style="padding:6px;">Total</th><th style="padding:6px;">Average</th></tr>';
+        let sn = 1;
+        studentIds.forEach(function(id){
+          const results = byStudent[id] || [];
+          let total = 0;
+          results.forEach(function(r){ total += r.total; });
+          const avg = results.length > 0 ? (total/results.length).toFixed(1) : '0';
+          html += '<tr><td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+(sn++)+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(studentNames[id])+'</td>'
+            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+total+'</td>'
+            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+avg+'</td></tr>';
+        });
+        html += '</table>';
+        document.getElementById('masterListContainer').innerHTML = html;
+      });
+    }).catch(function(err){ console.error(err); });
   }
 
   auth.onAuthStateChanged(function(user){
