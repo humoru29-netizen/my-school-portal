@@ -159,6 +159,38 @@
   footer{
     text-align:center;font-size:11px;color:#a89478;padding:20px 16px;
   }
+
+  /* ===== MODALS ===== */
+  .modal-overlay{
+    display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+    background:rgba(0,0,0,0.5);z-index:100;
+    align-items:flex-end;justify-content:center;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-box{
+    background:#fff;width:100%;max-width:480px;border-radius:16px 16px 0 0;
+    padding:20px;max-height:88vh;overflow-y:auto;
+  }
+  .modal-box h3{margin-top:0;color:var(--maroon);}
+  .modal-box label{display:block;font-size:13px;color:#6b5c45;margin:10px 0 4px;font-weight:bold;}
+  .modal-box input, .modal-box select, .modal-box textarea{
+    width:100%;padding:10px;border:1px solid #ddd0b8;border-radius:7px;font-size:15px;
+  }
+  .modal-actions{display:flex;gap:10px;margin-top:18px;}
+  .modal-actions button{
+    flex:1;padding:12px;border-radius:8px;border:none;font-weight:bold;cursor:pointer;
+  }
+  .btn-cancel{background:#f0ebe0;color:#6b5c45;}
+  .btn-submit{background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--maroon-dark);}
+  .modal-msg{font-size:13px;padding:8px 10px;border-radius:6px;margin-top:10px;display:none;}
+  .modal-msg.ok{background:#d4edda;color:#155724;display:block;}
+  .modal-msg.err{background:#f8d7da;color:#721c24;display:block;}
+
+  .list-item{
+    padding:12px;border:1px solid #eee2cc;border-radius:8px;margin-top:8px;font-size:14px;
+  }
+  .list-item .top-row{display:flex;justify-content:space-between;font-weight:bold;color:var(--maroon);}
+  .list-item .sub-row{color:#8a7d68;font-size:12px;margin-top:2px;}
 </style>
 </head>
 <body>
@@ -203,12 +235,14 @@
 
   <div class="content">
     <div class="quick-actions">
-      <button class="qa-btn primary">📄 &nbsp; Generate Results</button>
-      <button class="qa-btn gold">➕ &nbsp; Add Student</button>
-      <button class="qa-btn">📣 &nbsp; Post Notice</button>
-      <button class="qa-btn">➕ &nbsp; Record Payment</button>
-      <button class="qa-btn">⬇️ &nbsp; Export Report</button>
+      <button class="qa-btn primary" onclick="openModal('resultsModal')">📄 &nbsp; Generate Results</button>
+      <button class="qa-btn gold" onclick="openModal('studentModal')">➕ &nbsp; Add Student</button>
+      <button class="qa-btn" onclick="openModal('noticeModal')">📣 &nbsp; Post Notice</button>
+      <button class="qa-btn" onclick="openModal('paymentModal')">➕ &nbsp; Record Payment</button>
+      <button class="qa-btn" onclick="exportReport()">⬇️ &nbsp; Export Report</button>
     </div>
+
+    <div id="noticesList"></div>
 
     <div class="stat-card">
       <div class="label">Total Enrolled Students</div>
@@ -225,6 +259,94 @@
   </div>
 
   <footer>Faith International Schools, Itobe, Kogi State &middot; "In God We Trust"</footer>
+</div>
+
+<!-- ===================== ADD STUDENT MODAL ===================== -->
+<div class="modal-overlay" id="studentModal">
+  <div class="modal-box">
+    <h3>➕ Add Student</h3>
+    <label>Full Name</label>
+    <input id="stuName" type="text" placeholder="e.g. John Adeyemi">
+    <label>Level</label>
+    <select id="stuLevel">
+      <option value="nursery">Nursery</option>
+      <option value="primary">Primary</option>
+      <option value="secondary">Secondary</option>
+    </select>
+    <label>Class</label>
+    <input id="stuClass" type="text" placeholder="e.g. Primary 3 / JSS1">
+    <label>Age</label>
+    <input id="stuAge" type="number" placeholder="e.g. 10">
+    <label>Parent Contact</label>
+    <input id="stuContact" type="text" placeholder="Phone number">
+    <div id="studentMsg" class="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('studentModal')">Cancel</button>
+      <button class="btn-submit" onclick="addStudent()">Save Student</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== RECORD PAYMENT MODAL ===================== -->
+<div class="modal-overlay" id="paymentModal">
+  <div class="modal-box">
+    <h3>➕ Record Payment</h3>
+    <label>Student</label>
+    <select id="paySelect"><option value="">Loading students...</option></select>
+    <label>Amount (₦)</label>
+    <input id="payAmount" type="number" placeholder="e.g. 25000">
+    <label>Term</label>
+    <select id="payTerm">
+      <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+    </select>
+    <label>Purpose</label>
+    <input id="payPurpose" type="text" placeholder="e.g. School Fees">
+    <div id="paymentMsg" class="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('paymentModal')">Cancel</button>
+      <button class="btn-submit" onclick="recordPayment()">Save Payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== GENERATE RESULTS MODAL ===================== -->
+<div class="modal-overlay" id="resultsModal">
+  <div class="modal-box">
+    <h3>📄 Generate Result</h3>
+    <label>Student</label>
+    <select id="resSelect"><option value="">Loading students...</option></select>
+    <label>Subject</label>
+    <input id="resSubject" type="text" placeholder="e.g. Mathematics">
+    <label>Term</label>
+    <select id="resTerm">
+      <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+    </select>
+    <label>CA Score (out of 40)</label>
+    <input id="resCA" type="number" placeholder="0-40">
+    <label>Exam Score (out of 60)</label>
+    <input id="resExam" type="number" placeholder="0-60">
+    <div id="resultsMsg" class="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('resultsModal')">Cancel</button>
+      <button class="btn-submit" onclick="saveResult()">Save Result</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== POST NOTICE MODAL ===================== -->
+<div class="modal-overlay" id="noticeModal">
+  <div class="modal-box">
+    <h3>📣 Post Notice</h3>
+    <label>Title</label>
+    <input id="noticeTitle" type="text" placeholder="e.g. Resumption Date">
+    <label>Message</label>
+    <textarea id="noticeBody" rows="4" placeholder="Notice details..."></textarea>
+    <div id="noticeMsg" class="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('noticeModal')">Cancel</button>
+      <button class="btn-submit" onclick="postNotice()">Post Notice</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -304,28 +426,293 @@
     });
   }
 
+  let currentUser = null;
+  let currentRole = 'general_admin';
+  let currentLevelFilter = null; // null = see all levels (general_admin)
+
   function loadDashboard(user){
+    currentUser = user;
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('dashboardScreen').style.display = 'block';
 
-    // TODO: look up this user's role/profile from Firestore (users collection)
-    // and set dashTitle / dashMeta / userAvatar accordingly, e.g.:
-    //
-    // db.collection('users').doc(user.uid).get().then(function(doc){
-    //   const data = doc.data();
-    //   document.getElementById('dashTitle').textContent = data.role + ' Dashboard';
-    //   document.getElementById('userAvatar').textContent = data.initials || 'AD';
-    // });
+    db.collection('users').doc(user.uid).get().then(function(doc){
+      if(doc.exists){
+        const data = doc.data();
+        currentRole = data.role || 'general_admin';
+        const initials = (data.name || 'Admin').split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
+        document.getElementById('userAvatar').textContent = initials;
 
-    loadStudentCounts();
+        if(currentRole === 'primary_admin'){
+          document.getElementById('dashTitle').textContent = 'Primary Admin Dashboard';
+          currentLevelFilter = 'primary';
+        } else if(currentRole === 'secondary_admin'){
+          document.getElementById('dashTitle').textContent = 'Secondary Admin Dashboard';
+          currentLevelFilter = 'secondary';
+        } else {
+          document.getElementById('dashTitle').textContent = 'General Admin Dashboard';
+          currentLevelFilter = null;
+        }
+      }
+      loadStudentCounts();
+      loadNotices();
+      populateStudentDropdowns();
+    }).catch(function(err){
+      console.error(err);
+      loadStudentCounts();
+      loadNotices();
+      populateStudentDropdowns();
+    });
+  }
+
+  function studentsQuery(){
+    let q = db.collection('users').where('role','==','student');
+    if(currentLevelFilter){
+      q = q.where('level','==',currentLevelFilter);
+    }
+    return q;
   }
 
   function loadStudentCounts(){
-    // TODO: replace with real Firestore queries once schema is decided.
-    document.getElementById('totalStudents').textContent = '0';
-    document.getElementById('nurseryCount').textContent = '0';
-    document.getElementById('primaryCount').textContent = '0';
-    document.getElementById('secondaryCount').textContent = '0';
+    studentsQuery().get().then(function(snap){
+      let total = 0, nursery = 0, primary = 0, secondary = 0;
+      snap.forEach(function(doc){
+        const d = doc.data();
+        total++;
+        if(d.level === 'nursery') nursery++;
+        else if(d.level === 'primary') primary++;
+        else if(d.level === 'secondary') secondary++;
+      });
+      document.getElementById('totalStudents').textContent = total;
+      document.getElementById('nurseryCount').textContent = nursery;
+      document.getElementById('primaryCount').textContent = primary;
+      document.getElementById('secondaryCount').textContent = secondary;
+    }).catch(function(err){
+      console.error('Error loading student counts:', err);
+    });
+  }
+
+  function populateStudentDropdowns(){
+    studentsQuery().get().then(function(snap){
+      const options = ['<option value="">Select student...</option>'];
+      snap.forEach(function(doc){
+        const d = doc.data();
+        options.push('<option value="'+doc.id+'">'+e(d.name || 'Unnamed')+' ('+e(d.className || d.level || '')+')</option>');
+      });
+      document.getElementById('paySelect').innerHTML = options.join('');
+      document.getElementById('resSelect').innerHTML = options.join('');
+    });
+  }
+
+  function e(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ============ MODAL HELPERS ============
+  function openModal(id){
+    document.getElementById(id).classList.add('open');
+  }
+  function closeModal(id){
+    document.getElementById(id).classList.remove('open');
+    const msg = document.getElementById(id).querySelector('.modal-msg');
+    if(msg){ msg.style.display='none'; msg.textContent=''; }
+  }
+  function showMsg(id, text, isError){
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'modal-msg ' + (isError ? 'err' : 'ok');
+  }
+
+  // ============ ADD STUDENT ============
+  function addStudent(){
+    const name = document.getElementById('stuName').value.trim();
+    const level = document.getElementById('stuLevel').value;
+    const className = document.getElementById('stuClass').value.trim();
+    const age = document.getElementById('stuAge').value;
+    const contact = document.getElementById('stuContact').value.trim();
+
+    if(!name || !className){
+      showMsg('studentMsg', 'Please enter at least name and class.', true);
+      return;
+    }
+
+    db.collection('users').add({
+      role: 'student',
+      name: name,
+      level: level,
+      className: className,
+      age: age ? parseInt(age) : null,
+      parentContact: contact,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function(){
+      showMsg('studentMsg', 'Student added successfully!', false);
+      document.getElementById('stuName').value = '';
+      document.getElementById('stuClass').value = '';
+      document.getElementById('stuAge').value = '';
+      document.getElementById('stuContact').value = '';
+      loadStudentCounts();
+      populateStudentDropdowns();
+      setTimeout(function(){ closeModal('studentModal'); }, 1200);
+    }).catch(function(err){
+      showMsg('studentMsg', 'Error: ' + err.message, true);
+    });
+  }
+
+  // ============ RECORD PAYMENT ============
+  function recordPayment(){
+    const studentId = document.getElementById('paySelect').value;
+    const amount = document.getElementById('payAmount').value;
+    const term = document.getElementById('payTerm').value;
+    const purpose = document.getElementById('payPurpose').value.trim();
+
+    if(!studentId || !amount){
+      showMsg('paymentMsg', 'Please select a student and enter an amount.', true);
+      return;
+    }
+
+    db.collection('payments').add({
+      studentId: studentId,
+      amount: parseFloat(amount),
+      term: term,
+      purpose: purpose || 'School Fees',
+      recordedBy: currentUser ? currentUser.uid : null,
+      date: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function(){
+      showMsg('paymentMsg', 'Payment recorded successfully!', false);
+      document.getElementById('payAmount').value = '';
+      document.getElementById('payPurpose').value = '';
+      setTimeout(function(){ closeModal('paymentModal'); }, 1200);
+    }).catch(function(err){
+      showMsg('paymentMsg', 'Error: ' + err.message, true);
+    });
+  }
+
+  // ============ GENERATE RESULTS (WAEC-style grading) ============
+  function getGrade(total){
+    if(total >= 75) return {grade:'A1', remark:'Excellent'};
+    if(total >= 70) return {grade:'B2', remark:'Very Good'};
+    if(total >= 65) return {grade:'B3', remark:'Good'};
+    if(total >= 60) return {grade:'C4', remark:'Credit'};
+    if(total >= 55) return {grade:'C5', remark:'Credit'};
+    if(total >= 50) return {grade:'C6', remark:'Credit'};
+    if(total >= 45) return {grade:'D7', remark:'Pass'};
+    if(total >= 40) return {grade:'E8', remark:'Pass'};
+    return {grade:'F9', remark:'Fail'};
+  }
+
+  function saveResult(){
+    const studentId = document.getElementById('resSelect').value;
+    const subject = document.getElementById('resSubject').value.trim();
+    const term = document.getElementById('resTerm').value;
+    const ca = parseFloat(document.getElementById('resCA').value) || 0;
+    const exam = parseFloat(document.getElementById('resExam').value) || 0;
+
+    if(!studentId || !subject){
+      showMsg('resultsMsg', 'Please select a student and enter a subject.', true);
+      return;
+    }
+
+    const total = ca + exam;
+    const gradeInfo = getGrade(total);
+    const docId = studentId + '_' + subject.replace(/\s+/g,'') + '_' + term.replace(/\s+/g,'');
+
+    db.collection('results').doc(docId).set({
+      studentId: studentId,
+      subject: subject,
+      term: term,
+      caScore: ca,
+      examScore: exam,
+      total: total,
+      grade: gradeInfo.grade,
+      remark: gradeInfo.remark,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function(){
+      showMsg('resultsMsg', 'Result saved: ' + gradeInfo.grade + ' (' + total + '/100)', false);
+      document.getElementById('resSubject').value = '';
+      document.getElementById('resCA').value = '';
+      document.getElementById('resExam').value = '';
+      setTimeout(function(){ closeModal('resultsModal'); }, 1500);
+    }).catch(function(err){
+      showMsg('resultsMsg', 'Error: ' + err.message, true);
+    });
+  }
+
+  // ============ POST NOTICE ============
+  function postNotice(){
+    const title = document.getElementById('noticeTitle').value.trim();
+    const body = document.getElementById('noticeBody').value.trim();
+
+    if(!title || !body){
+      showMsg('noticeMsg', 'Please enter both a title and message.', true);
+      return;
+    }
+
+    db.collection('notices').add({
+      title: title,
+      body: body,
+      postedBy: currentUser ? currentUser.uid : null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    }).then(function(){
+      showMsg('noticeMsg', 'Notice posted!', false);
+      document.getElementById('noticeTitle').value = '';
+      document.getElementById('noticeBody').value = '';
+      loadNotices();
+      setTimeout(function(){ closeModal('noticeModal'); }, 1200);
+    }).catch(function(err){
+      showMsg('noticeMsg', 'Error: ' + err.message, true);
+    });
+  }
+
+  function loadNotices(){
+    db.collection('notices').orderBy('createdAt','desc').limit(5).get().then(function(snap){
+      const container = document.getElementById('noticesList');
+      if(snap.empty){ container.innerHTML = ''; return; }
+      let html = '<div style="margin-bottom:16px;"><h4 style="color:var(--maroon);margin-bottom:6px;">📣 Recent Notices</h4>';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        html += '<div class="list-item"><div class="top-row">'+e(d.title)+'</div><div class="sub-row">'+e(d.body)+'</div></div>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }).catch(function(err){
+      console.error('Error loading notices:', err);
+    });
+  }
+
+  // ============ EXPORT REPORT ============
+  function exportReport(){
+    Promise.all([
+      studentsQuery().get(),
+      db.collection('payments').get(),
+      db.collection('results').get()
+    ]).then(function(results){
+      const students = [];
+      results[0].forEach(function(doc){ students.push(Object.assign({id:doc.id}, doc.data())); });
+      const payments = [];
+      results[1].forEach(function(doc){ payments.push(Object.assign({id:doc.id}, doc.data())); });
+      const resultsData = [];
+      results[2].forEach(function(doc){ resultsData.push(Object.assign({id:doc.id}, doc.data())); });
+
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        students: students,
+        payments: payments,
+        results: resultsData
+      };
+
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'my-school-portal-export-' + new Date().toISOString().slice(0,10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }).catch(function(err){
+      alert('Export failed: ' + err.message);
+    });
   }
 
   auth.onAuthStateChanged(function(user){
