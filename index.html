@@ -212,6 +212,9 @@
       </div>
       <button id="loginBtn" type="submit">Login</button>
     </form>
+    <p style="text-align:center;margin-top:14px;">
+      <a href="#" id="showSignup" style="color:var(--maroon);font-size:13px;font-weight:bold;text-decoration:underline;">Create Account</a>
+    </p>
     <p class="small">MY SCHOOL PORTAL<br>faithinternationalsecondarysch@gmail.com</p>
   </div>
 </div>
@@ -243,6 +246,11 @@
     </div>
 
     <div id="noticesList"></div>
+
+    <div id="pendingApprovalsSection" style="display:none;">
+      <h4 style="color:var(--maroon);">⏳ Pending Approvals</h4>
+      <div id="pendingApprovalsList"></div>
+    </div>
 
     <div class="stat-card">
       <div class="label">Total Enrolled Students</div>
@@ -432,6 +440,34 @@
   </div>
 </div>
 
+<!-- ===================== SIGN UP MODAL ===================== -->
+<div class="modal-overlay" id="signupModal">
+  <div class="modal-box">
+    <h3>📝 Create Account</h3>
+    <label>Full Name</label>
+    <input id="suName" type="text" placeholder="Your full name">
+    <label>Email</label>
+    <input id="suEmail" type="email" placeholder="you@example.com">
+    <label>Password</label>
+    <input id="suPassword" type="password" placeholder="Choose a password (min 6 characters)">
+    <label>I am registering as a...</label>
+    <select id="suRole">
+      <option value="general_admin">General Admin</option>
+      <option value="primary_admin">Primary Admin</option>
+      <option value="secondary_admin">Secondary Admin</option>
+      <option value="teacher">Teacher</option>
+      <option value="cashier">Cashier</option>
+      <option value="student">Student</option>
+    </select>
+    <p style="font-size:12px;color:#8a7d68;margin-top:8px;">Your account will be reviewed by the General Admin before you can log in.</p>
+    <div id="signupMsg" class="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('signupModal')">Cancel</button>
+      <button class="btn-submit" onclick="submitSignup()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ============ FIREBASE CONFIG ============
   // 1. Go to console.firebase.google.com
@@ -468,6 +504,55 @@
     }
   });
 
+  document.getElementById('showSignup').addEventListener('click', function(e){
+    e.preventDefault();
+    openModal('signupModal');
+  });
+
+  function submitSignup(){
+    const name = document.getElementById('suName').value.trim();
+    const email = document.getElementById('suEmail').value.trim();
+    const password = document.getElementById('suPassword').value;
+    const requestedRole = document.getElementById('suRole').value;
+
+    if(!name || !email || !password){
+      showMsg('signupMsg', 'Please fill in all fields.', true);
+      return;
+    }
+    if(password.length < 6){
+      showMsg('signupMsg', 'Password must be at least 6 characters.', true);
+      return;
+    }
+
+    // Create the auth account, then immediately sign out (they must wait for approval)
+    // and write a pending profile to Firestore.
+    firebase.auth().createUserWithEmailAndPassword(email, password)
+      .then(function(cred){
+        return db.collection('users').doc(cred.user.uid).set({
+          name: name,
+          email: email,
+          requestedRole: requestedRole,
+          role: 'pending',
+          status: 'pending_approval',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(function(){
+          return firebase.auth().signOut();
+        });
+      })
+      .then(function(){
+        showMsg('signupMsg', 'Request submitted! Please wait for General Admin approval before logging in.', false);
+        document.getElementById('suName').value = '';
+        document.getElementById('suEmail').value = '';
+        document.getElementById('suPassword').value = '';
+        setTimeout(function(){ closeModal('signupModal'); }, 2500);
+      })
+      .catch(function(err){
+        let msg = err.message;
+        if(err.code === 'auth/email-already-in-use') msg = 'This email is already registered.';
+        showMsg('signupMsg', msg, true);
+      });
+  }
+
   function loginUser(){
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
@@ -487,12 +572,21 @@
 
     auth.signInWithEmailAndPassword(email, password)
       .then(function(cred){
-        loadDashboard(cred.user);
+        return db.collection('users').doc(cred.user.uid).get().then(function(doc){
+          const data = doc.exists ? doc.data() : {};
+          if(data.role === 'pending'){
+            return firebase.auth().signOut().then(function(){
+              throw {code:'custom/pending', message:'Your account is awaiting General Admin approval.'};
+            });
+          }
+          loadDashboard(cred.user);
+        });
       })
       .catch(function(error){
         let msg = 'Invalid email or password.';
-        if(error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
-        if(error.code === 'auth/network-request-failed') msg = 'Network error. Check your connection.';
+        if(error.code === 'custom/pending') msg = error.message;
+        else if(error.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.';
+        else if(error.code === 'auth/network-request-failed') msg = 'Network error. Check your connection.';
         errorBox.textContent = msg;
         errorBox.style.display = 'block';
       })
@@ -555,6 +649,9 @@
         loadStudentCounts();
         loadNotices();
         populateStudentDropdowns();
+        if(currentRole === 'general_admin'){
+          loadPendingApprovals();
+        }
       }
     }).catch(function(err){
       console.error(err);
@@ -568,6 +665,56 @@
   function showScreen(id){
     ['dashboardScreen','teacherScreen','cashierScreen','studentScreen'].forEach(function(s){
       document.getElementById(s).style.display = (s === id) ? 'block' : 'none';
+    });
+  }
+
+  // ============ PENDING APPROVALS (General Admin only) ============
+  function loadPendingApprovals(){
+    db.collection('users').where('role','==','pending').get().then(function(snap){
+      const section = document.getElementById('pendingApprovalsSection');
+      const container = document.getElementById('pendingApprovalsList');
+      if(snap.empty){
+        section.style.display = 'none';
+        return;
+      }
+      section.style.display = 'block';
+      let html = '';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        const roleLabels = {
+          general_admin:'General Admin', primary_admin:'Primary Admin',
+          secondary_admin:'Secondary Admin', teacher:'Teacher',
+          cashier:'Cashier', student:'Student'
+        };
+        html += '<div class="list-item">'
+          + '<div class="top-row">'+e(d.name || d.email)+'</div>'
+          + '<div class="sub-row">'+e(d.email)+' &middot; requested: '+(roleLabels[d.requestedRole] || d.requestedRole)+'</div>'
+          + '<div style="display:flex;gap:8px;margin-top:8px;">'
+          + '<button onclick="approveUser(\''+doc.id+'\',\''+d.requestedRole+'\')" style="flex:1;padding:8px;border:none;border-radius:6px;background:var(--gold);color:var(--maroon-dark);font-weight:bold;">Approve</button>'
+          + '<button onclick="rejectUser(\''+doc.id+'\')" style="flex:1;padding:8px;border:none;border-radius:6px;background:#f0ebe0;color:#6b5c45;font-weight:bold;">Reject</button>'
+          + '</div></div>';
+      });
+      container.innerHTML = html;
+    }).catch(function(err){ console.error(err); });
+  }
+
+  function approveUser(uid, requestedRole){
+    db.collection('users').doc(uid).update({
+      role: requestedRole,
+      status: 'active'
+    }).then(function(){
+      loadPendingApprovals();
+    }).catch(function(err){
+      alert('Error approving user: ' + err.message);
+    });
+  }
+
+  function rejectUser(uid){
+    if(!confirm('Reject and delete this account request?')) return;
+    db.collection('users').doc(uid).delete().then(function(){
+      loadPendingApprovals();
+    }).catch(function(err){
+      alert('Error rejecting user: ' + err.message);
     });
   }
 
