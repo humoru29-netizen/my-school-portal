@@ -261,6 +261,89 @@
   <footer>Faith International Schools, Itobe, Kogi State &middot; "In God We Trust"</footer>
 </div>
 
+<!-- ===================== TEACHER DASHBOARD ===================== -->
+<div id="teacherScreen" style="display:none;">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="crest-mini"><img src="data:image/jpeg;base64,__CREST_B64__" alt="Crest"></div>
+      <div>
+        <h2>Teacher Dashboard</h2>
+        <div class="meta" id="teacherMeta">1st Term · 2024/2025 Session</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button title="Refresh" onclick="location.reload()">⟳</button>
+      <div class="avatar" id="teacherAvatar">TC</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="quick-actions">
+      <button class="qa-btn primary" onclick="openModal('resultsModal')">📄 &nbsp; Submit Scores</button>
+    </div>
+    <h4 style="color:var(--maroon);">My Recent Score Entries</h4>
+    <div id="teacherResultsList"></div>
+    <button style="width:100%;padding:12px;border:none;border-radius:8px;background:#fff;border:1px solid #e5dcc8;color:#c0392b;font-weight:bold;margin-top:16px;" onclick="logoutUser()">Log Out</button>
+  </div>
+  <footer>Faith International Schools, Itobe, Kogi State &middot; "In God We Trust"</footer>
+</div>
+
+<!-- ===================== CASHIER DASHBOARD ===================== -->
+<div id="cashierScreen" style="display:none;">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="crest-mini"><img src="data:image/jpeg;base64,__CREST_B64__" alt="Crest"></div>
+      <div>
+        <h2>Cashier Dashboard</h2>
+        <div class="meta" id="cashierMeta">1st Term · 2024/2025 Session</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button title="Refresh" onclick="location.reload()">⟳</button>
+      <div class="avatar" id="cashierAvatar">CS</div>
+    </div>
+  </div>
+  <div class="content">
+    <div class="quick-actions">
+      <button class="qa-btn gold" onclick="openModal('paymentModal')">➕ &nbsp; Record Payment</button>
+      <button class="qa-btn" onclick="exportReport()">⬇️ &nbsp; Export Payment Report</button>
+    </div>
+    <div class="stat-card">
+      <div class="label">Total Collected</div>
+      <div class="big" id="cashierTotal">₦0</div>
+      <div class="sub" id="cashierSub">All recorded payments</div>
+    </div>
+    <h4 style="color:var(--maroon);">Recent Payments</h4>
+    <div id="cashierPaymentsList"></div>
+    <button style="width:100%;padding:12px;border:none;border-radius:8px;background:#fff;border:1px solid #e5dcc8;color:#c0392b;font-weight:bold;margin-top:16px;" onclick="logoutUser()">Log Out</button>
+  </div>
+  <footer>Faith International Schools, Itobe, Kogi State &middot; "In God We Trust"</footer>
+</div>
+
+<!-- ===================== STUDENT DASHBOARD ===================== -->
+<div id="studentScreen" style="display:none;">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="crest-mini"><img src="data:image/jpeg;base64,__CREST_B64__" alt="Crest"></div>
+      <div>
+        <h2 id="studentNameHeader">Student Dashboard</h2>
+        <div class="meta" id="studentMeta">1st Term · 2024/2025 Session</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button title="Refresh" onclick="location.reload()">⟳</button>
+      <div class="avatar" id="studentAvatar">ST</div>
+    </div>
+  </div>
+  <div class="content">
+    <h4 style="color:var(--maroon);">My Results</h4>
+    <div id="studentResultsList"></div>
+    <h4 style="color:var(--maroon);margin-top:16px;">My Payments</h4>
+    <div id="studentPaymentsList"></div>
+    <button style="width:100%;padding:12px;border:none;border-radius:8px;background:#fff;border:1px solid #e5dcc8;color:#c0392b;font-weight:bold;margin-top:16px;" onclick="logoutUser()">Log Out</button>
+  </div>
+  <footer>Faith International Schools, Itobe, Kogi State &middot; "In God We Trust"</footer>
+</div>
+
 <!-- ===================== ADD STUDENT MODAL ===================== -->
 <div class="modal-overlay" id="studentModal">
   <div class="modal-box">
@@ -421,7 +504,9 @@
 
   function logoutUser(){
     auth.signOut().then(function(){
-      document.getElementById('dashboardScreen').style.display = 'none';
+      ['dashboardScreen','teacherScreen','cashierScreen','studentScreen'].forEach(function(id){
+        document.getElementById(id).style.display = 'none';
+      });
       document.getElementById('loginScreen').style.display = 'grid';
     });
   }
@@ -429,19 +514,34 @@
   let currentUser = null;
   let currentRole = 'general_admin';
   let currentLevelFilter = null; // null = see all levels (general_admin)
+  let currentStudentDocId = null; // for student role, their own enrollment record ID
 
   function loadDashboard(user){
     currentUser = user;
     document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('dashboardScreen').style.display = 'block';
 
     db.collection('users').doc(user.uid).get().then(function(doc){
-      if(doc.exists){
-        const data = doc.data();
-        currentRole = data.role || 'general_admin';
-        const initials = (data.name || 'Admin').split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
-        document.getElementById('userAvatar').textContent = initials;
+      const data = doc.exists ? doc.data() : {};
+      currentRole = data.role || 'general_admin';
+      const initials = (data.name || 'User').split(' ').map(function(w){return w[0];}).join('').substring(0,2).toUpperCase();
 
+      if(currentRole === 'teacher'){
+        showScreen('teacherScreen');
+        document.getElementById('teacherAvatar').textContent = initials;
+        loadTeacherResults(user.uid);
+      } else if(currentRole === 'cashier'){
+        showScreen('cashierScreen');
+        document.getElementById('cashierAvatar').textContent = initials;
+        loadCashierData();
+      } else if(currentRole === 'student'){
+        showScreen('studentScreen');
+        document.getElementById('studentAvatar').textContent = initials;
+        document.getElementById('studentNameHeader').textContent = (data.name || 'Student') + ' — My Dashboard';
+        currentStudentDocId = data.studentId || user.uid;
+        loadStudentData(currentStudentDocId);
+      } else {
+        showScreen('dashboardScreen');
+        document.getElementById('userAvatar').textContent = initials;
         if(currentRole === 'primary_admin'){
           document.getElementById('dashTitle').textContent = 'Primary Admin Dashboard';
           currentLevelFilter = 'primary';
@@ -452,16 +552,84 @@
           document.getElementById('dashTitle').textContent = 'General Admin Dashboard';
           currentLevelFilter = null;
         }
+        loadStudentCounts();
+        loadNotices();
+        populateStudentDropdowns();
       }
-      loadStudentCounts();
-      loadNotices();
-      populateStudentDropdowns();
     }).catch(function(err){
       console.error(err);
+      showScreen('dashboardScreen');
       loadStudentCounts();
       loadNotices();
       populateStudentDropdowns();
     });
+  }
+
+  function showScreen(id){
+    ['dashboardScreen','teacherScreen','cashierScreen','studentScreen'].forEach(function(s){
+      document.getElementById(s).style.display = (s === id) ? 'block' : 'none';
+    });
+  }
+
+  // ============ TEACHER: view own submitted results ============
+  function loadTeacherResults(uid){
+    db.collection('results').orderBy('updatedAt','desc').limit(20).get().then(function(snap){
+      const container = document.getElementById('teacherResultsList');
+      if(snap.empty){ container.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No scores submitted yet.</p>'; return; }
+      let html = '';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        html += '<div class="list-item"><div class="top-row"><span>'+e(d.subject)+'</span><span>'+e(d.grade)+'</span></div><div class="sub-row">'+e(d.term)+' &middot; Total: '+d.total+'/100</div></div>';
+      });
+      container.innerHTML = html;
+    }).catch(function(err){ console.error(err); });
+  }
+
+  // ============ CASHIER: totals + recent payments ============
+  function loadCashierData(){
+    db.collection('payments').orderBy('date','desc').get().then(function(snap){
+      let total = 0;
+      const items = [];
+      snap.forEach(function(doc){
+        const d = doc.data();
+        total += (d.amount || 0);
+        items.push(d);
+      });
+      document.getElementById('cashierTotal').textContent = '₦' + total.toLocaleString();
+      const container = document.getElementById('cashierPaymentsList');
+      if(items.length === 0){ container.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No payments recorded yet.</p>'; return; }
+      let html = '';
+      items.slice(0,15).forEach(function(d){
+        html += '<div class="list-item"><div class="top-row"><span>'+e(d.purpose||'Payment')+'</span><span>₦'+(d.amount||0).toLocaleString()+'</span></div><div class="sub-row">'+e(d.term||'')+'</div></div>';
+      });
+      container.innerHTML = html;
+    }).catch(function(err){ console.error(err); });
+    populateStudentDropdowns();
+  }
+
+  // ============ STUDENT: own results + payments ============
+  function loadStudentData(studentDocId){
+    db.collection('results').where('studentId','==',studentDocId).get().then(function(snap){
+      const container = document.getElementById('studentResultsList');
+      if(snap.empty){ container.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No results published yet.</p>'; return; }
+      let html = '';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        html += '<div class="list-item"><div class="top-row"><span>'+e(d.subject)+'</span><span>'+e(d.grade)+'</span></div><div class="sub-row">'+e(d.term)+' &middot; '+d.total+'/100 &middot; '+e(d.remark)+'</div></div>';
+      });
+      container.innerHTML = html;
+    }).catch(function(err){ console.error(err); });
+
+    db.collection('payments').where('studentId','==',studentDocId).get().then(function(snap){
+      const container = document.getElementById('studentPaymentsList');
+      if(snap.empty){ container.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No payments on record.</p>'; return; }
+      let html = '';
+      snap.forEach(function(doc){
+        const d = doc.data();
+        html += '<div class="list-item"><div class="top-row"><span>'+e(d.purpose||'Payment')+'</span><span>₦'+(d.amount||0).toLocaleString()+'</span></div><div class="sub-row">'+e(d.term||'')+'</div></div>';
+      });
+      container.innerHTML = html;
+    }).catch(function(err){ console.error(err); });
   }
 
   function studentsQuery(){
