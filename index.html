@@ -174,7 +174,10 @@
     <div id="loginError" class="error"></div>
     <form id="loginForm" autocomplete="on">
       <input id="loginEmail" type="email" placeholder="Email" autocomplete="username" required>
-      <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required>
+      <div style="position:relative;">
+        <input id="loginPassword" type="password" placeholder="Password" autocomplete="current-password" required style="padding-right:60px;">
+        <button type="button" id="togglePw" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);width:auto;padding:6px 10px;margin:0;background:none;color:var(--maroon);font-size:12px;font-weight:bold;border:1px solid #ddd0b8;border-radius:6px;">Show</button>
+      </div>
       <button id="loginBtn" type="submit">Login</button>
     </form>
     <p class="small">MY SCHOOL PORTAL<br>faithinternationalsecondarysch@gmail.com</p>
@@ -232,12 +235,12 @@
   // 4. Enable Authentication > Email/Password
   // 5. Create Firestore Database (start in test mode, lock down rules later)
   const firebaseConfig = {
-    apiKey: "PASTE_YOUR_API_KEY",
-    authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
-    projectId: "PASTE_YOUR_PROJECT_ID",
-    storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
-    messagingSenderId: "PASTE_YOUR_SENDER_ID",
-    appId: "PASTE_YOUR_APP_ID"
+    apiKey: "AIzaSyBu_SNTOj-nprZtPgxQoZNVRS-w8cV7-FU",
+    authDomain: "myschoolportal-53158.firebaseapp.com",
+    projectId: "myschoolportal-53158",
+    storageBucket: "myschoolportal-53158.firebasestorage.app",
+    messagingSenderId: "728505506353",
+    appId: "1:728505506353:web:6cb995bb4e745769015310"
   };
 
   firebase.initializeApp(firebaseConfig);
@@ -247,6 +250,17 @@
   document.getElementById('loginForm').addEventListener('submit', function(e){
     e.preventDefault();
     loginUser();
+  });
+
+  document.getElementById('togglePw').addEventListener('click', function(){
+    const pw = document.getElementById('loginPassword');
+    if(pw.type === 'password'){
+      pw.type = 'text';
+      this.textContent = 'Hide';
+    } else {
+      pw.type = 'password';
+      this.textContent = 'Show';
+    }
   });
 
   function loginUser(){
