@@ -19,6 +19,14 @@
     --bg:#f7f3ec;
     --ink:#2a2018;
   }
+  body.theme-navy{
+    --maroon:#1a3a6b;
+    --maroon-dark:#102547;
+    --cream:#dbe6f5;
+    --gold:#d4a24c;
+    --gold2:#b8842f;
+    --bg:#f2f5fa;
+  }
   *{box-sizing:border-box;}
   body{
     font-family:Arial,sans-serif;
@@ -260,7 +268,7 @@
   <div class="content">
     <div class="grid-tools">
       <div class="grid-card" onclick="openModal('studentModal')"><div class="icon">➕</div><div class="label">Add Student</div></div>
-      <div class="grid-card" onclick="openModal('accountsModal')"><div class="icon">📁</div><div class="label">Manage Accounts</div></div>
+      <div class="grid-card" onclick="openAccountsModal()"><div class="icon">📁</div><div class="label">Manage Accounts</div></div>
       <div class="grid-card" onclick="openModal('resultsModal')"><div class="icon">📄</div><div class="label">Generate Results</div></div>
       <div class="grid-card" onclick="openModal('feeRecordsModal')"><div class="icon">🧾</div><div class="label">Fee Records</div></div>
       <div class="grid-card" onclick="openModal('noticeModal')"><div class="icon">📣</div><div class="label">Announcements</div></div>
@@ -502,10 +510,69 @@
 <div class="modal-overlay" id="accountsModal">
   <div class="modal-box">
     <h3>📁 Manage Accounts</h3>
+    <h4 style="color:var(--maroon);">Staff</h4>
     <div id="accountsMsg" class="modal-msg"></div>
-    <div id="accountsList" style="max-height:60vh;overflow-y:auto;"></div>
+    <div id="accountsList" style="max-height:40vh;overflow-y:auto;"></div>
+
+    <hr style="margin:18px 0;border:none;border-top:1px solid #eee2cc;">
+    <h4 style="color:var(--maroon);" id="studentsCountHeading">Students</h4>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button style="flex:1;padding:10px;border:1px solid #ddd0b8;border-radius:8px;background:#fff;color:var(--maroon);font-weight:bold;" onclick="openModal('studentModal')">➕ Add Single Student</button>
+      <button style="flex:1;padding:10px;border:1px solid #ddd0b8;border-radius:8px;background:#fff;color:var(--maroon);font-weight:bold;" onclick="openModal('bulkStudentModal')">➕ Add in Bulk</button>
+    </div>
+    <label>Filter by Class</label>
+    <select id="mgAccStudentClassFilter" onchange="loadAccountsStudentsList()"><option value="">All Classes</option></select>
+    <div id="accountsStudentsList" style="max-height:40vh;overflow-y:auto;margin-top:8px;"></div>
+
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('accountsModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== EDIT STUDENT MODAL ===================== -->
+<div class="modal-overlay" id="editStudentModal">
+  <div class="modal-box">
+    <h3>✏️ Edit Student</h3>
+    <label>Full Name</label>
+    <input id="editStuName" type="text" placeholder="Full Name">
+    <label>Level</label>
+    <select id="editStuLevel">
+      <option value="nursery">Nursery</option>
+      <option value="primary">Primary</option>
+      <option value="secondary">Secondary</option>
+    </select>
+    <label>Class</label>
+    <input id="editStuClass" type="text" placeholder="e.g. Primary 3 / JSS1">
+    <label>Age</label>
+    <input id="editStuAge" type="number" placeholder="Age">
+    <label>Parent Contact</label>
+    <input id="editStuContact" type="text" placeholder="Phone number">
+    <div id="editStuMsg" class="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('editStudentModal')">Cancel</button>
+      <button class="btn-submit" onclick="saveEditedStudent()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== BULK ADD STUDENTS MODAL ===================== -->
+<div class="modal-overlay" id="bulkStudentModal">
+  <div class="modal-box">
+    <h3>➕ Add Students in Bulk</h3>
+    <p style="font-size:13px;color:#8a7d68;">Enter one student per line, as: <b>Full Name, Class</b><br>Example:<br>Ali Amir, JSS 3<br>Shaibu Fatima, JSS 3</p>
+    <label>Level (applies to all)</label>
+    <select id="bulkStuLevel">
+      <option value="nursery">Nursery</option>
+      <option value="primary">Primary</option>
+      <option value="secondary" selected>Secondary</option>
+    </select>
+    <label>Students</label>
+    <textarea id="bulkStuText" rows="8" style="width:100%;padding:10px;border:1px solid #ddd0b8;border-radius:8px;box-sizing:border-box;font-family:inherit;" placeholder="Ali Amir, JSS 3&#10;Shaibu Fatima, JSS 3"></textarea>
+    <div id="bulkStuMsg" class="modal-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('bulkStudentModal')">Cancel</button>
+      <button class="btn-submit" onclick="submitBulkStudents()">Add Students</button>
     </div>
   </div>
 </div>
@@ -813,6 +880,7 @@
       ['dashboardScreen','teacherScreen','cashierScreen','studentScreen'].forEach(function(id){
         document.getElementById(id).style.display = 'none';
       });
+      document.body.classList.remove('theme-navy');
       document.getElementById('loginScreen').style.display = 'grid';
     });
   }
@@ -892,13 +960,17 @@
         if(currentRole === 'primary_admin'){
           document.getElementById('dashTitle').textContent = 'Primary Admin Dashboard';
           currentLevelFilter = 'primary';
+          document.body.classList.add('theme-navy');
         } else if(currentRole === 'secondary_admin'){
           document.getElementById('dashTitle').textContent = 'Secondary Admin Dashboard';
           currentLevelFilter = 'secondary';
+          document.body.classList.remove('theme-navy');
         } else {
           document.getElementById('dashTitle').textContent = 'General Admin Dashboard';
           currentLevelFilter = null;
+          document.body.classList.remove('theme-navy');
         }
+        applyAdminScopeUI();
         loadStudentCounts();
         loadNotices();
         populateStudentDropdowns();
@@ -1406,41 +1478,246 @@
   }
 
   // ============ MANAGE ACCOUNTS ============
+  let classLevelMap = {};
+  let subjectLevelMap = {};
+
+  function applyAdminScopeUI(){
+    // Portal Settings is school-wide, restricted to General Admin only
+    const settingsCard = document.querySelector('[onclick="openSettingsModal()"]');
+    if(settingsCard) settingsCard.style.display = (currentRole === 'general_admin') ? '' : 'none';
+
+    // Lock the Level field on Add Student / Bulk Add / Edit Student to the admin's own level
+    const levelSelects = ['stuLevel','bulkStuLevel','editStuLevel'];
+    levelSelects.forEach(function(id){
+      const el = document.getElementById(id);
+      if(!el) return;
+      if(currentLevelFilter){
+        el.value = currentLevelFilter;
+        el.disabled = true;
+      } else {
+        el.disabled = false;
+      }
+    });
+  }
+
+  function loadClassLevelMap(){
+    return Promise.all([
+      db.collection('classes').get(),
+      db.collection('subjects').get()
+    ]).then(function(results){
+      classLevelMap = {};
+      results[0].forEach(function(doc){
+        const d = doc.data();
+        classLevelMap[d.name] = d.level;
+      });
+      subjectLevelMap = {};
+      results[1].forEach(function(doc){
+        const d = doc.data();
+        subjectLevelMap[d.name] = d.level;
+      });
+    });
+  }
+
+  function teacherMatchesLevel(d){
+    if(!currentLevelFilter) return true; // general_admin sees everyone
+    if(!d.assignedClasses || d.assignedClasses.length === 0) return true; // unassigned teachers visible to all admins so they can be assigned
+    return d.assignedClasses.some(function(c){ return classLevelMap[c] === currentLevelFilter; });
+  }
+
   function loadAccountsList(){
+    loadClassLevelMap().then(function(){
     db.collection('users').get().then(function(snap){
       const roleLabels = {
         general_admin:'General Admin', primary_admin:'Primary Admin',
         secondary_admin:'Secondary Admin', teacher:'Teacher',
         cashier:'Cashier', student:'Student', pending:'Pending Approval'
       };
+      const assignableRoles = currentRole === 'general_admin'
+        ? ['general_admin','primary_admin','secondary_admin','teacher','cashier']
+        : ['teacher','cashier'];
       let html = '';
       snap.forEach(function(doc){
         const d = doc.data();
-        if(d.role === 'student') return; // students managed via Add Student / class lists
-        const assignBtn = d.role === 'teacher'
-          ? '<button onclick="openAssignModal(\''+doc.id+'\', \''+e(d.name||d.email||'').replace(/'/g,"\\'")+'\')" style="padding:6px 12px;border:none;border-radius:6px;background:#fff3d6;color:#8a5a00;font-weight:bold;">Assign</button>'
+        if(d.role === 'student') return; // students managed in Students section below
+
+        // Scope visibility for Primary/Secondary Admin
+        if(currentRole !== 'general_admin'){
+          const opposite = currentRole === 'primary_admin' ? 'secondary_admin' : 'primary_admin';
+          if(d.role === 'general_admin' || d.role === opposite) return;
+          if(d.role === 'teacher' && !teacherMatchesLevel(d)) return;
+        }
+
+        const nameEsc = (d.name||d.email||'').replace(/'/g,"\\'");
+        const assignedLine = d.role === 'teacher'
+          ? '<div class="sub-row">'
+            + (d.assignedClasses && d.assignedClasses.length ? e(d.assignedClasses.join(', ')) : '<span style="color:#c0392b;">No classes assigned</span>')
+            + ' &middot; '
+            + (d.assignedSubjects && d.assignedSubjects.length ? e(d.assignedSubjects.join(', ')) : '<span style="color:#c0392b;">No subjects assigned</span>')
+            + '</div>'
           : '';
+        const editBtn = d.role === 'teacher'
+          ? '<button onclick="openAssignModal(\''+doc.id+'\', \''+nameEsc+'\')" style="padding:6px 12px;border:none;border-radius:6px;background:#f0ebe0;color:var(--maroon);font-weight:bold;">Edit</button>'
+          : '';
+        const roleCell = assignableRoles.indexOf(d.role) !== -1 || currentRole === 'general_admin'
+          ? '<select onchange="changeUserRole(\''+doc.id+'\', this.value)" style="flex:1;padding:6px;border-radius:6px;border:1px solid #ddd0b8;">'
+            + assignableRoles.map(function(r){
+                return '<option value="'+r+'"'+(d.role===r?' selected':'')+'>'+roleLabels[r]+'</option>';
+              }).join('')
+            + '</select>'
+          : '<span style="flex:1;padding:6px;color:#8a7d68;">'+roleLabels[d.role]+'</span>';
         html += '<div class="list-item">'
-          + '<div class="top-row"><span>'+e(d.name || d.email || 'Unnamed')+'</span></div>'
+          + '<div class="top-row"><span style="font-weight:bold;">'+e(d.name || 'Unnamed')+'</span></div>'
           + '<div class="sub-row">'+e(d.email || '')+' &middot; '+ (roleLabels[d.role] || d.role) +'</div>'
+          + assignedLine
           + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'
-          + '<select onchange="changeUserRole(\''+doc.id+'\', this.value)" style="flex:1;padding:6px;border-radius:6px;border:1px solid #ddd0b8;">'
-          + ['general_admin','primary_admin','secondary_admin','teacher','cashier'].map(function(r){
-              return '<option value="'+r+'"'+(d.role===r?' selected':'')+'>'+roleLabels[r]+'</option>';
-            }).join('')
-          + '</select>'
-          + assignBtn
-          + '<button onclick="deleteAccount(\''+doc.id+'\')" style="padding:6px 12px;border:none;border-radius:6px;background:#f8d7da;color:#721c24;font-weight:bold;">Delete</button>'
+          + roleCell
+          + editBtn
+          + '<button onclick="deleteAccount(\''+doc.id+'\')" style="padding:6px 12px;border:none;border-radius:6px;background:#f8d7da;color:#721c24;font-weight:bold;">Remove</button>'
           + '</div></div>';
       });
       document.getElementById('accountsList').innerHTML = html || '<p style="color:#8a7d68;font-size:13px;">No staff accounts yet.</p>';
     }).catch(function(err){ console.error(err); });
+    });
   }
 
   function changeUserRole(uid, newRole){
     db.collection('users').doc(uid).update({role:newRole}).then(function(){
       showMsg('accountsMsg', 'Role updated.', false);
     }).catch(function(err){ showMsg('accountsMsg', err.message, true); });
+  }
+
+  function openAccountsModal(){
+    openModal('accountsModal');
+    loadAccountsList();
+    populateAccountsClassFilter();
+    loadAccountsStudentsList();
+  }
+
+  function populateAccountsClassFilter(){
+    db.collection('classes').get().then(function(snap){
+      const opts = ['<option value="">All Classes</option>'];
+      snap.forEach(function(doc){
+        const d = doc.data();
+        if(currentLevelFilter && d.level !== currentLevelFilter) return;
+        opts.push('<option value="'+e(d.name)+'">'+e(d.name)+'</option>');
+      });
+      document.getElementById('mgAccStudentClassFilter').innerHTML = opts.join('');
+    });
+  }
+
+  function loadAccountsStudentsList(){
+    const classFilter = document.getElementById('mgAccStudentClassFilter').value;
+    let q = db.collection('users').where('role','==','student');
+    if(currentLevelFilter) q = q.where('level','==',currentLevelFilter);
+    if(classFilter) q = q.where('className','==',classFilter);
+
+    q.get().then(function(snap){
+      let html = '';
+      let count = 0;
+      snap.forEach(function(doc){
+        count++;
+        const d = doc.data();
+        html += '<div class="list-item">'
+          + '<div class="top-row"><span style="font-weight:bold;">'+e(d.name || 'Unnamed')+'</span></div>'
+          + '<div class="sub-row">'+e(d.className || '')+(d.age ? ' &middot; Age '+e(String(d.age)) : '')+'</div>'
+          + '<div style="display:flex;gap:8px;margin-top:8px;">'
+          + '<button onclick="editStudent(\''+doc.id+'\')" style="flex:1;padding:6px;border:none;border-radius:6px;background:#f0ebe0;color:var(--maroon);font-weight:bold;">Edit</button>'
+          + '<button onclick="deleteStudentAccount(\''+doc.id+'\')" style="flex:1;padding:6px;border:none;border-radius:6px;background:#f8d7da;color:#721c24;font-weight:bold;">Remove</button>'
+          + '</div></div>';
+      });
+      document.getElementById('studentsCountHeading').textContent = 'Students (' + count + ')';
+      document.getElementById('accountsStudentsList').innerHTML = html || '<p style="color:#8a7d68;font-size:13px;">No students found.</p>';
+    }).catch(function(err){ console.error(err); });
+  }
+
+  let editingStudentId = null;
+
+  function editStudent(uid){
+    db.collection('users').doc(uid).get().then(function(doc){
+      if(!doc.exists) return;
+      const d = doc.data();
+      editingStudentId = uid;
+      document.getElementById('editStuName').value = d.name || '';
+      document.getElementById('editStuLevel').value = d.level || 'secondary';
+      document.getElementById('editStuClass').value = d.className || '';
+      document.getElementById('editStuAge').value = d.age || '';
+      document.getElementById('editStuContact').value = d.parentContact || '';
+      document.getElementById('editStuMsg').style.display = 'none';
+      openModal('editStudentModal');
+    });
+  }
+
+  function saveEditedStudent(){
+    if(!editingStudentId) return;
+    const name = document.getElementById('editStuName').value.trim();
+    const level = document.getElementById('editStuLevel').value;
+    const className = document.getElementById('editStuClass').value.trim();
+    const age = document.getElementById('editStuAge').value;
+    const contact = document.getElementById('editStuContact').value.trim();
+
+    if(!name || !className){
+      showMsg('editStuMsg', 'Please enter at least name and class.', true);
+      return;
+    }
+
+    db.collection('users').doc(editingStudentId).update({
+      name: name, level: level, className: className,
+      age: age ? parseInt(age) : null, parentContact: contact
+    }).then(function(){
+      showMsg('editStuMsg', 'Student updated!', false);
+      loadAccountsStudentsList();
+      populateStudentDropdowns();
+      setTimeout(function(){ closeModal('editStudentModal'); }, 1000);
+    }).catch(function(err){ showMsg('editStuMsg', err.message, true); });
+  }
+
+  function deleteStudentAccount(uid){
+    if(!confirm('Remove this student record? This cannot be undone.')) return;
+    db.collection('users').doc(uid).delete().then(function(){
+      loadAccountsStudentsList();
+      loadStudentCounts();
+      populateStudentDropdowns();
+    }).catch(function(err){ alert('Error: ' + err.message); });
+  }
+
+  function submitBulkStudents(){
+    const level = document.getElementById('bulkStuLevel').value;
+    const raw = document.getElementById('bulkStuText').value.trim();
+    if(!raw){
+      showMsg('bulkStuMsg', 'Please enter at least one student.', true);
+      return;
+    }
+    const lines = raw.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+    const batch = db.batch();
+    let added = 0, skipped = 0;
+
+    lines.forEach(function(line){
+      const parts = line.split(',');
+      const name = (parts[0] || '').trim();
+      const className = (parts[1] || '').trim();
+      if(!name || !className){ skipped++; return; }
+      const ref = db.collection('users').doc();
+      batch.set(ref, {
+        role: 'student', name: name, level: level, className: className,
+        age: null, parentContact: '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      added++;
+    });
+
+    if(added === 0){
+      showMsg('bulkStuMsg', 'No valid lines found. Use format: Name, Class', true);
+      return;
+    }
+
+    batch.commit().then(function(){
+      showMsg('bulkStuMsg', added + ' student(s) added!' + (skipped ? ' (' + skipped + ' line(s) skipped)' : ''), false);
+      document.getElementById('bulkStuText').value = '';
+      loadAccountsStudentsList();
+      loadStudentCounts();
+      populateStudentDropdowns();
+      setTimeout(function(){ closeModal('bulkStudentModal'); }, 1500);
+    }).catch(function(err){ showMsg('bulkStuMsg', err.message, true); });
   }
 
   // ============ ASSIGN CLASSES/SUBJECTS TO TEACHER ============
@@ -1464,6 +1741,7 @@
       let classHtml = '';
       classesSnap.forEach(function(doc){
         const d = doc.data();
+        if(currentLevelFilter && d.level !== currentLevelFilter) return;
         const checked = assignedClasses.indexOf(d.name) !== -1 ? 'checked' : '';
         classHtml += '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:normal;">'
           + '<input type="checkbox" class="assign-class-cb" value="'+e(d.name)+'" '+checked+'> '+e(d.name)+' ('+e(d.level)+')</label>';
@@ -1473,6 +1751,7 @@
       let subjHtml = '';
       subjectsSnap.forEach(function(doc){
         const d = doc.data();
+        if(currentLevelFilter && d.level !== currentLevelFilter) return;
         const checked = assignedSubjects.indexOf(d.name) !== -1 ? 'checked' : '';
         subjHtml += '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:normal;">'
           + '<input type="checkbox" class="assign-subject-cb" value="'+e(d.name)+'" '+checked+'> '+e(d.name)+' ('+e(d.level)+')</label>';
@@ -1485,17 +1764,37 @@
 
   function saveTeacherAssignments(){
     if(!assignTeacherUid) return;
-    const classes = Array.prototype.slice.call(document.querySelectorAll('.assign-class-cb:checked')).map(function(cb){return cb.value;});
-    const subjects = Array.prototype.slice.call(document.querySelectorAll('.assign-subject-cb:checked')).map(function(cb){return cb.value;});
+    const checkedClasses = Array.prototype.slice.call(document.querySelectorAll('.assign-class-cb:checked')).map(function(cb){return cb.value;});
+    const checkedSubjects = Array.prototype.slice.call(document.querySelectorAll('.assign-subject-cb:checked')).map(function(cb){return cb.value;});
 
-    db.collection('users').doc(assignTeacherUid).update({
-      assignedClasses: classes,
-      assignedSubjects: subjects
+    db.collection('users').doc(assignTeacherUid).get().then(function(doc){
+      const existing = doc.exists ? doc.data() : {};
+      let finalClasses = checkedClasses;
+      let finalSubjects = checkedSubjects;
+
+      // If this admin only sees one level's classes/subjects, preserve the teacher's
+      // existing assignments from the OTHER level rather than wiping them out.
+      if(currentLevelFilter){
+        const outOfScopeClasses = (existing.assignedClasses || []).filter(function(c){
+          return classLevelMap[c] !== currentLevelFilter;
+        });
+        const outOfScopeSubjects = (existing.assignedSubjects || []).filter(function(s){
+          return subjectLevelMap[s] !== currentLevelFilter;
+        });
+        finalClasses = checkedClasses.concat(outOfScopeClasses);
+        finalSubjects = checkedSubjects.concat(outOfScopeSubjects);
+      }
+
+      return db.collection('users').doc(assignTeacherUid).update({
+        assignedClasses: finalClasses,
+        assignedSubjects: finalSubjects
+      });
     }).then(function(){
       showMsg('assignMsg', 'Assignments saved!', false);
       setTimeout(function(){ closeModal('assignModal'); }, 1000);
     }).catch(function(err){ showMsg('assignMsg', err.message, true); });
   }
+
 
   function deleteAccount(uid){
     if(!confirm("Remove this account's access? (This deletes their profile, not their login.)")) return;
