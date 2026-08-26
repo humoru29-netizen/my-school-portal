@@ -606,16 +606,19 @@
 <!-- ===================== ASSIGN CLASSES/SUBJECTS MODAL ===================== -->
 <div class="modal-overlay" id="assignModal">
   <div class="modal-box">
-    <h3>🎓 Assign Classes &amp; Subjects</h3>
-    <p id="assignTeacherName" style="font-size:13px;color:#8a7d68;"></p>
-    <h4 style="color:var(--maroon);margin-bottom:6px;">Classes</h4>
-    <div id="assignClassesList" style="max-height:150px;overflow-y:auto;border:1px solid #eee2cc;border-radius:8px;padding:8px;margin-bottom:12px;"></div>
-    <h4 style="color:var(--maroon);margin-bottom:6px;">Subjects</h4>
-    <div id="assignSubjectsList" style="max-height:150px;overflow-y:auto;border:1px solid #eee2cc;border-radius:8px;padding:8px;"></div>
+    <h3>🎓 Assign Subject &amp; Class</h3>
+    <p id="assignTeacherName" style="font-size:13px;color:#8a7d68;font-weight:bold;"></p>
+    <p style="font-size:13px;color:#8a7d68;">A teacher can only enter scores for the subject/class pairs assigned here — this stops, say, an English teacher from accidentally entering Mathematics scores.</p>
+    <label>Subject</label>
+    <select id="assignSubjectSelect"><option value="">Select subject...</option></select>
+    <label>Class</label>
+    <select id="assignClassSelect"><option value="">Select class...</option></select>
+    <button class="btn-submit" style="margin-top:10px;" onclick="addTeacherAssignment()">Add Assignment</button>
     <div id="assignMsg" class="modal-msg"></div>
+    <h4 style="color:var(--maroon);margin-top:16px;">Current Assignments</h4>
+    <div id="assignmentsList" style="max-height:200px;overflow-y:auto;"></div>
     <div class="modal-actions">
-      <button class="btn-cancel" onclick="closeModal('assignModal')">Cancel</button>
-      <button class="btn-submit" onclick="saveTeacherAssignments()">Save Assignments</button>
+      <button class="btn-cancel" onclick="closeModal('assignModal')">Close</button>
     </div>
   </div>
 </div>
@@ -708,6 +711,7 @@
     <button class="btn-submit" style="margin-top:10px;" onclick="loadCaList()">Load Students</button>
     <div id="caListMsg" class="modal-msg"></div>
     <div id="caListContainer" style="margin-top:12px;"></div>
+    <button id="caListPrintBtn" class="btn-submit" style="display:none;margin-top:10px;" onclick="printDocument('CA List (Blank Score Sheet)', document.getElementById('caListContainer').innerHTML)">🖨️ Print</button>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('caListModal')">Close</button>
     </div>
@@ -726,6 +730,7 @@
     </select>
     <button class="btn-submit" style="margin-top:10px;" onclick="loadReportCard()">Generate</button>
     <div id="reportCardContainer" style="margin-top:12px;"></div>
+    <button id="reportCardPrintBtn" class="btn-submit" style="display:none;margin-top:10px;" onclick="printDocument('Student Report Card', document.getElementById('reportCardContainer').innerHTML)">🖨️ Print Report Card</button>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('reportCardModal')">Close</button>
     </div>
@@ -744,6 +749,7 @@
     </select>
     <button class="btn-submit" style="margin-top:10px;" onclick="loadMasterList()">Generate</button>
     <div id="masterListContainer" style="margin-top:12px;overflow-x:auto;"></div>
+    <button id="masterListPrintBtn" class="btn-submit" style="display:none;margin-top:10px;" onclick="printDocument('Master List (Broadsheet)', document.getElementById('masterListContainer').innerHTML)">🖨️ Print</button>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('masterListModal')">Close</button>
     </div>
@@ -1325,6 +1331,15 @@
       showMsg('resultsMsg', 'CA1 and CA2 must be 0-15, and Exam must be 0-70.', true);
       return;
     }
+    if(currentRole === 'teacher'){
+      const className = document.getElementById('resClass').value;
+      const assignments = currentUserData.assignments || [];
+      const allowed = assignments.some(function(a){ return a.subject === subject && a.className === className; });
+      if(!allowed){
+        showMsg('resultsMsg', 'You are not assigned to teach ' + subject + ' for ' + className + '. Contact your admin.', true);
+        return;
+      }
+    }
 
     const caScore = ca1 + ca2;
     const total = caScore + exam;
@@ -1604,28 +1619,27 @@
     });
   }
 
-  // ============ TEACHER: ASSIGNED CLASSES/SUBJECTS ============
+  // ============ TEACHER: ASSIGNED SUBJECT+CLASS PAIRS ============
   function populateTeacherAssignments(){
-    const assignedClasses = currentUserData.assignedClasses || [];
-    const assignedSubjects = currentUserData.assignedSubjects || [];
+    const assignments = currentUserData.assignments || [];
+    const classSet = {};
+    assignments.forEach(function(a){ classSet[a.className] = true; });
+    const classNames = Object.keys(classSet);
 
     const classOpts = ['<option value="">Select class...</option>']
-      .concat(assignedClasses.map(function(c){ return '<option value="'+e(c)+'">'+e(c)+'</option>'; }));
+      .concat(classNames.map(function(c){ return '<option value="'+e(c)+'">'+e(c)+'</option>'; }));
     document.getElementById('resClass').innerHTML = classOpts.join('');
 
-    const subjOpts = ['<option value="">Select subject...</option>']
-      .concat(assignedSubjects.map(function(s){ return '<option value="'+e(s)+'">'+e(s)+'</option>'; }));
-    document.getElementById('resSubject').innerHTML = subjOpts.join('');
-
+    document.getElementById('resSubject').innerHTML = '<option value="">Select class first...</option>';
     document.getElementById('resSelect').innerHTML = '<option value="">Select a class first...</option>';
     document.getElementById('resTerm').value = portalSettings.currentTerm;
 
     document.getElementById('resSessionInfo').textContent =
       portalSettings.currentTerm + ' · ' + portalSettings.currentSession + ' Session';
 
-    if(assignedClasses.length === 0 || assignedSubjects.length === 0){
+    if(assignments.length === 0){
       document.getElementById('resSessionInfo').innerHTML +=
-        '<br><span style="color:#c0392b;">No classes/subjects assigned yet — ask your admin to assign them via Manage Accounts.</span>';
+        '<br><span style="color:#c0392b;">No subjects/classes assigned yet — ask your admin to assign them via Manage Accounts.</span>';
     }
   }
 
@@ -1648,6 +1662,15 @@
       resSelect.innerHTML = '<option value="">Error loading students</option>';
       console.error(err);
     });
+
+    // Teachers: subject options restricted to whichever subjects are paired with this class
+    if(currentRole === 'teacher'){
+      const assignments = currentUserData.assignments || [];
+      const subjects = assignments.filter(function(a){ return a.className === className; }).map(function(a){ return a.subject; });
+      const subjOpts = ['<option value="">Select subject...</option>']
+        .concat(subjects.map(function(s){ return '<option value="'+e(s)+'">'+e(s)+'</option>'; }));
+      document.getElementById('resSubject').innerHTML = subjOpts.join('');
+    }
 
     // Admins (not restricted to assigned subjects) get the full subject list for convenience
     if(currentRole !== 'teacher'){
@@ -1704,8 +1727,8 @@
 
   function teacherMatchesLevel(d){
     if(!currentLevelFilter) return true; // general_admin sees everyone
-    if(!d.assignedClasses || d.assignedClasses.length === 0) return true; // unassigned teachers visible to all admins so they can be assigned
-    return d.assignedClasses.some(function(c){ return classLevelMap[c] === currentLevelFilter; });
+    if(!d.assignments || d.assignments.length === 0) return true; // unassigned teachers visible to all admins so they can be assigned
+    return d.assignments.some(function(a){ return classLevelMap[a.className] === currentLevelFilter; });
   }
 
   function loadAccountsList(){
@@ -1734,9 +1757,9 @@
         const nameEsc = (d.name||d.email||'').replace(/'/g,"\\'");
         const assignedLine = d.role === 'teacher'
           ? '<div class="sub-row">'
-            + (d.assignedClasses && d.assignedClasses.length ? e(d.assignedClasses.join(', ')) : '<span style="color:#c0392b;">No classes assigned</span>')
-            + ' &middot; '
-            + (d.assignedSubjects && d.assignedSubjects.length ? e(d.assignedSubjects.join(', ')) : '<span style="color:#c0392b;">No subjects assigned</span>')
+            + (d.assignments && d.assignments.length
+                ? e(d.assignments.map(function(a){ return a.subject + ' — ' + a.className; }).join(', '))
+                : '<span style="color:#c0392b;">No subjects/classes assigned</span>')
             + '</div>'
           : '';
         const editBtn = d.role === 'teacher'
@@ -1904,8 +1927,9 @@
     }).catch(function(err){ showMsg('bulkStuMsg', err.message, true); });
   }
 
-  // ============ ASSIGN CLASSES/SUBJECTS TO TEACHER ============
+  // ============ ASSIGN SUBJECT+CLASS PAIRS TO TEACHER ============
   let assignTeacherUid = null;
+  let currentAssignments = []; // [{subject, className}]
 
   function openAssignModal(uid, teacherName){
     assignTeacherUid = uid;
@@ -1919,63 +1943,70 @@
     ]).then(function(results){
       const classesSnap = results[0], subjectsSnap = results[1], teacherDoc = results[2];
       const teacherData = teacherDoc.exists ? teacherDoc.data() : {};
-      const assignedClasses = teacherData.assignedClasses || [];
-      const assignedSubjects = teacherData.assignedSubjects || [];
+      currentAssignments = teacherData.assignments || [];
 
-      let classHtml = '';
+      const classOpts = ['<option value="">Select class...</option>'];
       classesSnap.forEach(function(doc){
         const d = doc.data();
         if(currentLevelFilter && d.level !== currentLevelFilter) return;
-        const checked = assignedClasses.indexOf(d.name) !== -1 ? 'checked' : '';
-        classHtml += '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:normal;">'
-          + '<input type="checkbox" class="assign-class-cb" value="'+e(d.name)+'" '+checked+'> '+e(d.name)+' ('+e(d.level)+')</label>';
+        classOpts.push('<option value="'+e(d.name)+'">'+e(d.name)+' ('+e(d.level)+')</option>');
       });
-      document.getElementById('assignClassesList').innerHTML = classHtml || '<p style="color:#8a7d68;font-size:13px;">No classes yet — add some in Classes &amp; Subjects first.</p>';
+      document.getElementById('assignClassSelect').innerHTML = classOpts.join('');
 
-      let subjHtml = '';
+      const subjOpts = ['<option value="">Select subject...</option>'];
       subjectsSnap.forEach(function(doc){
         const d = doc.data();
         if(currentLevelFilter && d.level !== currentLevelFilter) return;
-        const checked = assignedSubjects.indexOf(d.name) !== -1 ? 'checked' : '';
-        subjHtml += '<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:normal;">'
-          + '<input type="checkbox" class="assign-subject-cb" value="'+e(d.name)+'" '+checked+'> '+e(d.name)+' ('+e(d.level)+')</label>';
+        subjOpts.push('<option value="'+e(d.name)+'">'+e(d.name)+' ('+e(d.level)+')</option>');
       });
-      document.getElementById('assignSubjectsList').innerHTML = subjHtml || '<p style="color:#8a7d68;font-size:13px;">No subjects yet — add some in Classes &amp; Subjects first.</p>';
+      document.getElementById('assignSubjectSelect').innerHTML = subjOpts.join('');
 
+      renderAssignmentsList();
       openModal('assignModal');
     }).catch(function(err){ alert('Error loading: ' + err.message); });
   }
 
-  function saveTeacherAssignments(){
+  function renderAssignmentsList(){
+    const listEl = document.getElementById('assignmentsList');
+    if(currentAssignments.length === 0){
+      listEl.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No subjects/classes assigned yet.</p>';
+      return;
+    }
+    let html = '';
+    currentAssignments.forEach(function(a, idx){
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #eee2cc;">'
+        + '<span>'+e(a.subject)+' &mdash; '+e(a.className)+'</span>'
+        + '<button onclick="removeTeacherAssignment('+idx+')" style="padding:4px 10px;border:none;border-radius:6px;background:#f8d7da;color:#721c24;font-weight:bold;">Remove</button>'
+        + '</div>';
+    });
+    listEl.innerHTML = html;
+  }
+
+  function addTeacherAssignment(){
     if(!assignTeacherUid) return;
-    const checkedClasses = Array.prototype.slice.call(document.querySelectorAll('.assign-class-cb:checked')).map(function(cb){return cb.value;});
-    const checkedSubjects = Array.prototype.slice.call(document.querySelectorAll('.assign-subject-cb:checked')).map(function(cb){return cb.value;});
+    const subject = document.getElementById('assignSubjectSelect').value;
+    const className = document.getElementById('assignClassSelect').value;
+    if(!subject || !className){
+      showMsg('assignMsg', 'Please select both a subject and a class.', true);
+      return;
+    }
+    const exists = currentAssignments.some(function(a){ return a.subject === subject && a.className === className; });
+    if(exists){
+      showMsg('assignMsg', 'That subject/class pair is already assigned.', true);
+      return;
+    }
+    currentAssignments.push({ subject: subject, className: className });
+    db.collection('users').doc(assignTeacherUid).update({ assignments: currentAssignments }).then(function(){
+      showMsg('assignMsg', 'Assignment added!', false);
+      renderAssignmentsList();
+    }).catch(function(err){ showMsg('assignMsg', err.message, true); });
+  }
 
-    db.collection('users').doc(assignTeacherUid).get().then(function(doc){
-      const existing = doc.exists ? doc.data() : {};
-      let finalClasses = checkedClasses;
-      let finalSubjects = checkedSubjects;
-
-      // If this admin only sees one level's classes/subjects, preserve the teacher's
-      // existing assignments from the OTHER level rather than wiping them out.
-      if(currentLevelFilter){
-        const outOfScopeClasses = (existing.assignedClasses || []).filter(function(c){
-          return classLevelMap[c] !== currentLevelFilter;
-        });
-        const outOfScopeSubjects = (existing.assignedSubjects || []).filter(function(s){
-          return subjectLevelMap[s] !== currentLevelFilter;
-        });
-        finalClasses = checkedClasses.concat(outOfScopeClasses);
-        finalSubjects = checkedSubjects.concat(outOfScopeSubjects);
-      }
-
-      return db.collection('users').doc(assignTeacherUid).update({
-        assignedClasses: finalClasses,
-        assignedSubjects: finalSubjects
-      });
-    }).then(function(){
-      showMsg('assignMsg', 'Assignments saved!', false);
-      setTimeout(function(){ closeModal('assignModal'); }, 1000);
+  function removeTeacherAssignment(idx){
+    if(!assignTeacherUid) return;
+    currentAssignments.splice(idx, 1);
+    db.collection('users').doc(assignTeacherUid).update({ assignments: currentAssignments }).then(function(){
+      renderAssignmentsList();
     }).catch(function(err){ showMsg('assignMsg', err.message, true); });
   }
 
@@ -2019,13 +2050,16 @@
         return;
       }
       let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-        + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Name</th><th style="padding:6px;">CA Score</th></tr>';
+        + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Name</th><th style="padding:6px;">CA1 (0-15)</th><th style="padding:6px;">CA2 (0-15)</th><th style="padding:6px;">Exam (0-70)</th></tr>';
       snap.forEach(function(doc){
         html += '<tr><td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(doc.data().name)+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;"><input type="number" style="width:60px;padding:4px;" placeholder="0-40"></td></tr>';
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;"><input type="number" style="width:50px;padding:4px;" placeholder="0-15"></td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;"><input type="number" style="width:50px;padding:4px;" placeholder="0-15"></td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;"><input type="number" style="width:50px;padding:4px;" placeholder="0-70"></td></tr>';
       });
-      html += '</table><p style="font-size:11px;color:#8a7d68;margin-top:8px;">This is a blank scoring sheet for offline/manual use. To save scores into the system, use Generate Results per student.</p>';
+      html += '</table><p style="font-size:11px;color:#8a7d68;margin-top:8px;">This is a blank scoring sheet for offline/manual use. To save scores into the system, use Submit Score per student.</p>';
       document.getElementById('caListContainer').innerHTML = html;
+      document.getElementById('caListPrintBtn').style.display = 'block';
     }).catch(function(err){ showMsg('caListMsg', err.message, true); });
   }
 
@@ -2033,7 +2067,44 @@
   function openReportCardModal(){
     document.getElementById('reportCardTermSelect').value = portalSettings.currentTerm;
     document.getElementById('reportCardContainer').innerHTML = '';
+    document.getElementById('reportCardPrintBtn').style.display = 'none';
     openModal('reportCardModal');
+  }
+
+  function ordinal(n){
+    const s = ['th','st','nd','rd'];
+    const v = n % 100;
+    return n + (s[(v-20)%10] || s[v] || s[0]);
+  }
+
+  function printDocument(title, bodyHtml){
+    const crestSrc = (document.querySelector('.crest-badge img') || {}).src || '';
+    const letterhead = ''
+      + '<div style="display:flex;align-items:center;gap:14px;border-bottom:3px solid #7a1f2b;padding-bottom:10px;margin-bottom:16px;">'
+      + (crestSrc ? '<img src="'+crestSrc+'" style="width:60px;height:60px;border-radius:50%;">' : '')
+      + '<div>'
+      + '<div style="font-size:18px;font-weight:bold;color:#7a1f2b;">FAITH INTERNATIONAL SCHOOLS</div>'
+      + '<div style="font-size:13px;color:#7a1f2b;">Itobe, Kogi State &middot; "In God We Trust"</div>'
+      + '<div style="font-size:12px;color:#555;margin-top:2px;">'+e(title)+'</div>'
+      + '</div></div>';
+
+    const printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<title>'+e(title)+'</title>'
+      + '<style>'
+      + 'body{font-family:Arial,sans-serif;color:#2a2018;padding:24px;}'
+      + 'table{width:100%;border-collapse:collapse;}'
+      + '@media print{ body{padding:0;} }'
+      + '</style></head><body>'
+      + letterhead
+      + bodyHtml
+      + '<script>window.onload = function(){ window.print(); };</' + 'script>'
+      + '</body></html>';
+
+    const blob = new Blob([printHtml], {type:'text/html'});
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank');
+    if(!win){ alert('Please allow pop-ups to print.'); }
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
   }
 
   function generateRemark(avg){
@@ -2066,11 +2137,11 @@
         const allTermResults = res[2];
         const teachersSnap = res[3];
 
-        // Determine Form Master: a teacher whose assignedClasses includes this class
+        // Determine Form Master: a teacher whose assignments include this class
         let formMasterName = '';
         teachersSnap.forEach(function(doc){
           const d = doc.data();
-          if(!formMasterName && d.assignedClasses && d.assignedClasses.indexOf(className) !== -1){
+          if(!formMasterName && d.assignments && d.assignments.some(function(a){ return a.className === className; })){
             formMasterName = d.name || '';
           }
         });
@@ -2134,7 +2205,7 @@
 
         let html = '<h4 style="color:var(--maroon);">'+e(stu.name)+' — '+e(className)+'</h4>'
           + '<p style="font-size:13px;color:#8a7d68;margin:0 0 10px;">'+e(term)+' &middot; '+e(portalSettings.currentSession)+' Session'
-          + (position !== '-' ? ' &middot; Position: <strong>'+position+' of '+classSize+'</strong>' : '') + '</p>'
+          + (position !== '-' ? ' &middot; Position: <strong>'+ordinal(position)+' of '+classSize+'</strong>' : '') + '</p>'
           + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
           + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Subject</th><th style="padding:6px;">CA1</th><th style="padding:6px;">CA2</th><th style="padding:6px;">Exam</th><th style="padding:6px;">Total</th><th style="padding:6px;">Grade</th><th style="padding:6px;">Status</th></tr>'
           + rows + '</table>'
@@ -2162,6 +2233,7 @@
           + '</div>';
 
         document.getElementById('reportCardContainer').innerHTML = html || '<p>No results yet.</p>';
+        document.getElementById('reportCardPrintBtn').style.display = html ? 'block' : 'none';
       });
     }).catch(function(err){ console.error(err); });
   }
@@ -2170,6 +2242,7 @@
   function openMasterListModal(){
     document.getElementById('masterTermSelect').value = portalSettings.currentTerm;
     document.getElementById('masterListContainer').innerHTML = '';
+    document.getElementById('masterListPrintBtn').style.display = 'none';
     openModal('masterListModal');
   }
 
@@ -2245,10 +2318,11 @@
               }).join('')
             + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;font-weight:bold;">'+r.total+'</td>'
             + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+r.avg.toFixed(1)+'</td>'
-            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;font-weight:bold;">'+positionMap[r.id]+'</td></tr>';
+            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;font-weight:bold;">'+ordinal(positionMap[r.id])+'</td></tr>';
         });
         html += '</table>';
         document.getElementById('masterListContainer').innerHTML = html;
+        document.getElementById('masterListPrintBtn').style.display = 'block';
       });
     }).catch(function(err){ console.error(err); });
   }
