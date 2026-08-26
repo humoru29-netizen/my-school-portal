@@ -273,8 +273,8 @@
       <div class="grid-card" onclick="openModal('feeRecordsModal')"><div class="icon">🧾</div><div class="label">Fee Records</div></div>
       <div class="grid-card" onclick="openModal('noticeModal')"><div class="icon">📣</div><div class="label">Announcements</div></div>
       <div class="grid-card" onclick="openModal('caListModal')"><div class="icon">📋</div><div class="label">CA List</div></div>
-      <div class="grid-card" onclick="openModal('reportCardModal')"><div class="icon">📃</div><div class="label">Report Cards</div></div>
-      <div class="grid-card" onclick="openModal('masterListModal')"><div class="icon">📊</div><div class="label">Master List</div></div>
+      <div class="grid-card" onclick="openReportCardModal()"><div class="icon">📃</div><div class="label">Report Cards</div></div>
+      <div class="grid-card" onclick="openMasterListModal()"><div class="icon">📊</div><div class="label">Master List</div></div>
       <div class="grid-card" onclick="openResultsApprovalModal()"><div class="icon">✅</div><div class="label">Results Approval</div></div>
       <div class="grid-card" onclick="openModal('classesModal')"><div class="icon">🏫</div><div class="label">Classes &amp; Subjects</div></div>
       <div class="grid-card" onclick="openSettingsModal()"><div class="icon">⚙️</div><div class="label">Portal Settings</div></div>
@@ -667,6 +667,14 @@
     </select>
     <label>Current Session</label>
     <input id="setSession" type="text" placeholder="e.g. 2024/2025">
+    <label>This Term Ends</label>
+    <input id="setTermEnds" type="date">
+    <label>Next Term Begins</label>
+    <input id="setNextTermBegins" type="date">
+    <label>Principal's Name</label>
+    <input id="setPrincipalName" type="text" placeholder="e.g. Mr. John Doe">
+    <label>Promotion Average Threshold (%) — 3rd Term only</label>
+    <input id="setPromotionThreshold" type="number" min="0" max="100" placeholder="e.g. 50">
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('settingsModal')">Cancel</button>
       <button class="btn-submit" onclick="savePortalSettings()">Save Settings</button>
@@ -700,6 +708,9 @@
     <button class="btn-submit" style="margin-top:10px;" onclick="loadCaList()">Load Students</button>
     <div id="caListMsg" class="modal-msg"></div>
     <div id="caListContainer" style="margin-top:12px;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('caListModal')">Close</button>
+    </div>
   </div>
 </div>
 
@@ -709,6 +720,10 @@
     <h3>📃 Report Card</h3>
     <label>Student</label>
     <select id="reportCardSelect"><option value="">Select student...</option></select>
+    <label>Term</label>
+    <select id="reportCardTermSelect">
+      <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+    </select>
     <button class="btn-submit" style="margin-top:10px;" onclick="loadReportCard()">Generate</button>
     <div id="reportCardContainer" style="margin-top:12px;"></div>
     <div class="modal-actions">
@@ -723,6 +738,10 @@
     <h3>📊 Master List (Broadsheet)</h3>
     <label>Class</label>
     <select id="masterClassSelect"><option value="">Select class...</option></select>
+    <label>Term</label>
+    <select id="masterTermSelect">
+      <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+    </select>
     <button class="btn-submit" style="margin-top:10px;" onclick="loadMasterList()">Generate</button>
     <div id="masterListContainer" style="margin-top:12px;overflow-x:auto;"></div>
     <div class="modal-actions">
@@ -916,7 +935,10 @@
   let currentUserData = {};
   let currentLevelFilter = null; // null = see all levels (general_admin)
   let currentStudentDocId = null; // for student role, their own enrollment record ID
-  let portalSettings = { currentTerm: '1st Term', currentSession: '2024/2025' };
+  let portalSettings = {
+    currentTerm: '1st Term', currentSession: '2024/2025',
+    termEnds: '', nextTermBegins: '', principalName: '', promotionThreshold: 50
+  };
 
   function loadPortalSettings(){
     return db.collection('settings').doc('portal').get().then(function(doc){
@@ -924,6 +946,10 @@
         const d = doc.data();
         portalSettings.currentTerm = d.currentTerm || portalSettings.currentTerm;
         portalSettings.currentSession = d.currentSession || portalSettings.currentSession;
+        portalSettings.termEnds = d.termEnds || '';
+        portalSettings.nextTermBegins = d.nextTermBegins || '';
+        portalSettings.principalName = d.principalName || '';
+        portalSettings.promotionThreshold = (d.promotionThreshold != null) ? d.promotionThreshold : 50;
       }
       const metaText = portalSettings.currentTerm + ' · ' + portalSettings.currentSession + ' Session';
       ['dashMeta','teacherMeta','cashierMeta','studentMeta'].forEach(function(id){
@@ -938,15 +964,25 @@
   function openSettingsModal(){
     document.getElementById('setTerm').value = portalSettings.currentTerm;
     document.getElementById('setSession').value = portalSettings.currentSession;
+    document.getElementById('setTermEnds').value = portalSettings.termEnds;
+    document.getElementById('setNextTermBegins').value = portalSettings.nextTermBegins;
+    document.getElementById('setPrincipalName').value = portalSettings.principalName;
+    document.getElementById('setPromotionThreshold').value = portalSettings.promotionThreshold;
     openModal('settingsModal');
   }
 
   function savePortalSettings(){
     const term = document.getElementById('setTerm').value;
     const session = document.getElementById('setSession').value.trim();
+    const termEnds = document.getElementById('setTermEnds').value;
+    const nextTermBegins = document.getElementById('setNextTermBegins').value;
+    const principalName = document.getElementById('setPrincipalName').value.trim();
+    const promotionThreshold = parseFloat(document.getElementById('setPromotionThreshold').value) || 50;
     if(!session){ showMsg('settingsMsg', 'Please enter a session, e.g. 2024/2025.', true); return; }
     db.collection('settings').doc('portal').set({
-      currentTerm: term, currentSession: session
+      currentTerm: term, currentSession: session,
+      termEnds: termEnds, nextTermBegins: nextTermBegins,
+      principalName: principalName, promotionThreshold: promotionThreshold
     }, {merge:true}).then(function(){
       showMsg('settingsMsg', 'Settings saved!', false);
       loadPortalSettings();
@@ -1994,44 +2030,155 @@
   }
 
   // ============ REPORT CARD ============
+  function openReportCardModal(){
+    document.getElementById('reportCardTermSelect').value = portalSettings.currentTerm;
+    document.getElementById('reportCardContainer').innerHTML = '';
+    openModal('reportCardModal');
+  }
+
+  function generateRemark(avg){
+    if(avg >= 70) return 'Excellent performance. Keep up the outstanding work!';
+    if(avg >= 60) return 'Very good result this term. Well done.';
+    if(avg >= 50) return 'Good effort, but there is room for improvement.';
+    if(avg >= 40) return 'Fair result. Must work harder next term.';
+    return 'Poor performance. Serious improvement is required.';
+  }
+
   function loadReportCard(){
     const studentId = document.getElementById('reportCardSelect').value;
+    const term = document.getElementById('reportCardTermSelect').value;
     if(!studentId){ return; }
-    Promise.all([
-      db.collection('users').doc(studentId).get(),
-      db.collection('results').where('studentId','==',studentId).get()
-    ]).then(function(res){
-      const stu = res[0].data();
-      let rows = '';
-      let total = 0, count = 0;
-      res[1].forEach(function(doc){
-        const d = doc.data();
-        const statusBadge = d.released
-          ? '<span style="color:#2a6b2a;font-weight:bold;">Released</span>'
-          : '<span style="color:#c0392b;font-weight:bold;">Withheld</span>';
-        rows += '<tr><td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(d.subject)+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+(d.ca1Score!=null?d.ca1Score:'-')+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+(d.ca2Score!=null?d.ca2Score:'-')+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.examScore+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.total+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+e(d.grade)+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+statusBadge+'</td></tr>';
-        total += d.total; count++;
+    document.getElementById('reportCardContainer').innerHTML = '<p style="color:#8a7d68;font-size:13px;">Loading...</p>';
+
+    db.collection('users').doc(studentId).get().then(function(stuDoc){
+      const stu = stuDoc.data();
+      const className = stu.className || '';
+
+      Promise.all([
+        db.collection('results').where('studentId','==',studentId).where('term','==',term).get(),
+        db.collection('users').where('role','==','student').where('className','==',className).get(),
+        db.collection('results').where('term','==',term).get(),
+        db.collection('users').where('role','==','teacher').get()
+      ]).then(function(res){
+        const myResults = res[0];
+        const classmateIds = [];
+        res[1].forEach(function(doc){ classmateIds.push(doc.id); });
+        const allTermResults = res[2];
+        const teachersSnap = res[3];
+
+        // Determine Form Master: a teacher whose assignedClasses includes this class
+        let formMasterName = '';
+        teachersSnap.forEach(function(doc){
+          const d = doc.data();
+          if(!formMasterName && d.assignedClasses && d.assignedClasses.indexOf(className) !== -1){
+            formMasterName = d.name || '';
+          }
+        });
+
+        // Build this student's subject rows
+        let rows = '';
+        let total = 0, count = 0;
+        myResults.forEach(function(doc){
+          const d = doc.data();
+          const statusBadge = d.released
+            ? '<span style="color:#2a6b2a;font-weight:bold;">Released</span>'
+            : '<span style="color:#c0392b;font-weight:bold;">Withheld</span>';
+          rows += '<tr><td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(d.subject)+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+(d.ca1Score!=null?d.ca1Score:'-')+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+(d.ca2Score!=null?d.ca2Score:'-')+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.examScore+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.total+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+e(d.grade)+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+statusBadge+'</td></tr>';
+          total += d.total; count++;
+        });
+        const avg = count > 0 ? (total/count) : 0;
+
+        // Compute class position for this student
+        const byStudent = {};
+        allTermResults.forEach(function(doc){
+          const d = doc.data();
+          if(classmateIds.indexOf(d.studentId) === -1) return;
+          if(!byStudent[d.studentId]) byStudent[d.studentId] = { total: 0, count: 0 };
+          byStudent[d.studentId].total += d.total;
+          byStudent[d.studentId].count += 1;
+        });
+        const ranked = classmateIds.map(function(id){
+          const r = byStudent[id] || { total: 0, count: 0 };
+          return { id: id, total: r.total };
+        }).sort(function(a,b){ return b.total - a.total; });
+        let position = '-';
+        let rank = 0, lastTotal = null, seen = 0;
+        for(let i=0;i<ranked.length;i++){
+          seen++;
+          if(ranked[i].total !== lastTotal){ rank = seen; lastTotal = ranked[i].total; }
+          if(ranked[i].id === studentId){ position = rank; break; }
+        }
+        const classSize = classmateIds.length;
+
+        // Promotion decision (3rd Term only)
+        let promotionHtml = '';
+        if(term === '3rd Term'){
+          const promoted = avg >= (portalSettings.promotionThreshold || 50);
+          promotionHtml = '<div style="margin-top:14px;padding:10px;border-radius:8px;background:'
+            + (promoted ? '#e6f4ea' : '#fbe9e7') + ';border:1px solid '
+            + (promoted ? '#2a6b2a' : '#c0392b') + ';">'
+            + '<strong style="color:' + (promoted ? '#2a6b2a' : '#c0392b') + ';">'
+            + (promoted ? '✓ PROMOTED to the next class' : '✗ NOT PROMOTED — to repeat this class')
+            + '</strong></div>';
+        }
+
+        const crestSrc = (document.querySelector('.crest-badge img') || {}).src || '';
+        const today = new Date().toLocaleDateString();
+        const remarkText = generateRemark(avg);
+
+        let html = '<h4 style="color:var(--maroon);">'+e(stu.name)+' — '+e(className)+'</h4>'
+          + '<p style="font-size:13px;color:#8a7d68;margin:0 0 10px;">'+e(term)+' &middot; '+e(portalSettings.currentSession)+' Session'
+          + (position !== '-' ? ' &middot; Position: <strong>'+position+' of '+classSize+'</strong>' : '') + '</p>'
+          + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+          + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Subject</th><th style="padding:6px;">CA1</th><th style="padding:6px;">CA2</th><th style="padding:6px;">Exam</th><th style="padding:6px;">Total</th><th style="padding:6px;">Grade</th><th style="padding:6px;">Status</th></tr>'
+          + rows + '</table>'
+          + '<p style="margin-top:10px;font-weight:bold;color:var(--maroon);">Average: '+avg.toFixed(1)+'</p>'
+          + promotionHtml
+          + '<div style="margin-top:14px;padding-top:10px;border-top:1px solid #eee2cc;font-size:13px;">'
+          + '<p><strong>Class Teacher\'s Remark:</strong> '+e(remarkText)+'</p>'
+          + '<p><strong>Principal\'s Remark:</strong> '+e(remarkText)+'</p>'
+          + '</div>'
+          + '<div style="margin-top:14px;padding-top:10px;border-top:1px solid #eee2cc;font-size:13px;">'
+          + '<p>This term ends: <strong>'+(portalSettings.termEnds || '—')+'</strong></p>'
+          + '<p>Next term begins: <strong>'+(portalSettings.nextTermBegins || '—')+'</strong></p>'
+          + '</div>'
+          + '<div style="margin-top:20px;display:flex;justify-content:space-between;align-items:flex-end;font-size:12px;">'
+          + '<div style="text-align:center;">'
+          + '<div style="border-bottom:1px solid #333;width:140px;height:30px;"></div>'
+          + '<div>Form Master' + (formMasterName ? ' ('+e(formMasterName)+')' : '') + '</div>'
+          + '</div>'
+          + (crestSrc ? '<img src="'+crestSrc+'" style="width:50px;height:50px;border-radius:50%;opacity:0.85;">' : '')
+          + '<div style="text-align:center;">'
+          + '<div style="border-bottom:1px solid #333;width:140px;height:30px;"></div>'
+          + '<div>Principal' + (portalSettings.principalName ? ' ('+e(portalSettings.principalName)+')' : '') + '</div>'
+          + '<div style="color:#8a7d68;">'+today+'</div>'
+          + '</div>'
+          + '</div>';
+
+        document.getElementById('reportCardContainer').innerHTML = html || '<p>No results yet.</p>';
       });
-      const avg = count > 0 ? (total/count).toFixed(1) : 0;
-      let html = '<h4 style="color:var(--maroon);">'+e(stu.name)+' — '+e(stu.className||'')+'</h4>'
-        + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-        + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Subject</th><th style="padding:6px;">CA1</th><th style="padding:6px;">CA2</th><th style="padding:6px;">Exam</th><th style="padding:6px;">Total</th><th style="padding:6px;">Grade</th><th style="padding:6px;">Status</th></tr>'
-        + rows + '</table>'
-        + '<p style="margin-top:10px;font-weight:bold;color:var(--maroon);">Average: '+avg+'</p>';
-      document.getElementById('reportCardContainer').innerHTML = html || '<p>No results yet.</p>';
     }).catch(function(err){ console.error(err); });
   }
 
   // ============ MASTER LIST (BROADSHEET) ============
+  function openMasterListModal(){
+    document.getElementById('masterTermSelect').value = portalSettings.currentTerm;
+    document.getElementById('masterListContainer').innerHTML = '';
+    openModal('masterListModal');
+  }
+
   function loadMasterList(){
     const className = document.getElementById('masterClassSelect').value;
+    const term = document.getElementById('masterTermSelect').value;
     if(!className){ return; }
+    document.getElementById('masterListContainer').innerHTML = '<p style="color:#8a7d68;font-size:13px;">Loading...</p>';
+
     db.collection('users').where('role','==','student').where('className','==',className).get().then(function(snap){
       const studentIds = [];
       const studentNames = {};
@@ -2042,27 +2189,63 @@
         return;
       }
 
-      db.collection('results').get().then(function(resSnap){
+      db.collection('results').where('term','==',term).get().then(function(resSnap){
         const byStudent = {};
+        const subjectSet = {};
         resSnap.forEach(function(doc){
           const d = doc.data();
           if(studentIds.indexOf(d.studentId) === -1) return;
-          if(!byStudent[d.studentId]) byStudent[d.studentId] = [];
-          byStudent[d.studentId].push(d);
+          if(!byStudent[d.studentId]) byStudent[d.studentId] = {};
+          byStudent[d.studentId][d.subject] = d.total;
+          subjectSet[d.subject] = true;
+        });
+
+        const subjects = Object.keys(subjectSet).sort();
+
+        if(subjects.length === 0){
+          document.getElementById('masterListContainer').innerHTML = '<p style="color:#8a7d68;font-size:13px;">No scores submitted yet for this class/term.</p>';
+          return;
+        }
+
+        // Compute totals/averages per student
+        const rows = studentIds.map(function(id){
+          const scores = byStudent[id] || {};
+          let total = 0, count = 0;
+          subjects.forEach(function(s){
+            if(scores[s] != null){ total += scores[s]; count++; }
+          });
+          const avg = count > 0 ? (total/count) : 0;
+          return { id: id, name: studentNames[id], scores: scores, total: total, avg: avg };
+        });
+
+        // Rank by total descending (standard competition ranking; ties share a rank)
+        const sortedByTotal = rows.slice().sort(function(a,b){ return b.total - a.total; });
+        const positionMap = {};
+        let rank = 0, lastTotal = null, seen = 0;
+        sortedByTotal.forEach(function(r){
+          seen++;
+          if(r.total !== lastTotal){ rank = seen; lastTotal = r.total; }
+          positionMap[r.id] = rank;
         });
 
         let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
-          + '<tr style="background:var(--cream);"><th style="padding:6px;">S/N</th><th style="padding:6px;text-align:left;">Name</th><th style="padding:6px;">Total</th><th style="padding:6px;">Average</th></tr>';
-        let sn = 1;
-        studentIds.forEach(function(id){
-          const results = byStudent[id] || [];
-          let total = 0;
-          results.forEach(function(r){ total += r.total; });
-          const avg = results.length > 0 ? (total/results.length).toFixed(1) : '0';
-          html += '<tr><td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+(sn++)+'</td>'
-            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(studentNames[id])+'</td>'
-            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+total+'</td>'
-            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+avg+'</td></tr>';
+          + '<tr style="background:var(--cream);"><th style="padding:6px;">S/N</th><th style="padding:6px;text-align:left;">Name</th>'
+          + subjects.map(function(s){ return '<th style="padding:6px;">'+e(s)+'</th>'; }).join('')
+          + '<th style="padding:6px;">Total</th><th style="padding:6px;">Average</th><th style="padding:6px;">Position</th></tr>';
+
+        // Display students ordered by position (best first), matching typical broadsheet convention
+        rows.sort(function(a,b){ return positionMap[a.id] - positionMap[b.id]; });
+
+        rows.forEach(function(r, idx){
+          html += '<tr><td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+(idx+1)+'</td>'
+            + '<td style="padding:6px;border-bottom:1px solid #eee2cc;white-space:nowrap;">'+e(r.name)+'</td>'
+            + subjects.map(function(s){
+                const v = r.scores[s];
+                return '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+(v!=null?v:'-')+'</td>';
+              }).join('')
+            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;font-weight:bold;">'+r.total+'</td>'
+            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;">'+r.avg.toFixed(1)+'</td>'
+            + '<td style="padding:6px;text-align:center;border-bottom:1px solid #eee2cc;font-weight:bold;">'+positionMap[r.id]+'</td></tr>';
         });
         html += '</table>';
         document.getElementById('masterListContainer').innerHTML = html;
