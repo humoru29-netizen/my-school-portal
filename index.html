@@ -275,6 +275,7 @@
       <div class="grid-card" onclick="openModal('caListModal')"><div class="icon">📋</div><div class="label">CA List</div></div>
       <div class="grid-card" onclick="openModal('reportCardModal')"><div class="icon">📃</div><div class="label">Report Cards</div></div>
       <div class="grid-card" onclick="openModal('masterListModal')"><div class="icon">📊</div><div class="label">Master List</div></div>
+      <div class="grid-card" onclick="openResultsApprovalModal()"><div class="icon">✅</div><div class="label">Results Approval</div></div>
       <div class="grid-card" onclick="openModal('classesModal')"><div class="icon">🏫</div><div class="label">Classes &amp; Subjects</div></div>
       <div class="grid-card" onclick="openSettingsModal()"><div class="icon">⚙️</div><div class="label">Portal Settings</div></div>
       <div class="grid-card" onclick="exportReport()"><div class="icon">⬇️</div><div class="label">Export Report</div></div>
@@ -438,7 +439,7 @@
 <!-- ===================== GENERATE RESULTS MODAL ===================== -->
 <div class="modal-overlay" id="resultsModal">
   <div class="modal-box">
-    <h3>📄 Generate Result</h3>
+    <h3>📄 Submit Score</h3>
     <div id="resSessionInfo" style="font-size:13px;color:#8a7d68;margin-bottom:8px;"></div>
     <label>Class</label>
     <select id="resClass" onchange="onResultsClassChange()"><option value="">Select class...</option></select>
@@ -450,14 +451,39 @@
     <select id="resTerm">
       <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
     </select>
-    <label>CA Score (out of 40)</label>
-    <input id="resCA" type="number" placeholder="0-40">
-    <label>Exam Score (out of 60)</label>
-    <input id="resExam" type="number" placeholder="0-60">
+    <label>CA1 Score (out of 15)</label>
+    <input id="resCA1" type="number" min="0" max="15" placeholder="0-15">
+    <label>CA2 Score (out of 15)</label>
+    <input id="resCA2" type="number" min="0" max="15" placeholder="0-15">
+    <label>Exam Score (out of 70)</label>
+    <input id="resExam" type="number" min="0" max="70" placeholder="0-70">
     <div id="resultsMsg" class="modal-msg"></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('resultsModal')">Cancel</button>
-      <button class="btn-submit" onclick="saveResult()">Save Result</button>
+      <button class="btn-submit" onclick="saveResult()">Submit Score</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== RESULTS APPROVAL MODAL ===================== -->
+<div class="modal-overlay" id="approvalModal">
+  <div class="modal-box">
+    <h3>✅ Results Approval</h3>
+    <label>Class</label>
+    <select id="approvalClassSelect" onchange="loadApprovalList()"><option value="">Select class...</option></select>
+    <label>Term</label>
+    <select id="approvalTermSelect" onchange="loadApprovalList()">
+      <option>1st Term</option><option>2nd Term</option><option>3rd Term</option>
+    </select>
+    <div id="approvalBulkActions" style="display:none;gap:8px;margin:10px 0;flex-wrap:wrap;">
+      <button onclick="bulkApprovalAction('generate')" style="flex:1;min-width:90px;padding:8px;border:none;border-radius:6px;background:#e8e0f5;color:#4a2e8a;font-weight:bold;">Generate All</button>
+      <button onclick="bulkApprovalAction('release')" style="flex:1;min-width:90px;padding:8px;border:none;border-radius:6px;background:#d9f0d9;color:#2a6b2a;font-weight:bold;">Release All</button>
+      <button onclick="bulkApprovalAction('withhold')" style="flex:1;min-width:90px;padding:8px;border:none;border-radius:6px;background:#f8d7da;color:#721c24;font-weight:bold;">Withhold All</button>
+    </div>
+    <div id="approvalMsg" class="modal-msg"></div>
+    <div id="approvalList" style="max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('approvalModal')">Close</button>
     </div>
   </div>
 </div>
@@ -1085,9 +1111,9 @@
 
   // ============ STUDENT: own results + payments ============
   function loadStudentData(studentDocId){
-    db.collection('results').where('studentId','==',studentDocId).get().then(function(snap){
+    db.collection('results').where('studentId','==',studentDocId).where('released','==',true).get().then(function(snap){
       const container = document.getElementById('studentResultsList');
-      if(snap.empty){ container.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No results published yet.</p>'; return; }
+      if(snap.empty){ container.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No results released yet.</p>'; return; }
       let html = '';
       snap.forEach(function(doc){
         const d = doc.data();
@@ -1251,15 +1277,21 @@
     const studentId = document.getElementById('resSelect').value;
     const subject = document.getElementById('resSubject').value.trim();
     const term = document.getElementById('resTerm').value;
-    const ca = parseFloat(document.getElementById('resCA').value) || 0;
+    const ca1 = parseFloat(document.getElementById('resCA1').value) || 0;
+    const ca2 = parseFloat(document.getElementById('resCA2').value) || 0;
     const exam = parseFloat(document.getElementById('resExam').value) || 0;
 
     if(!studentId || !subject){
       showMsg('resultsMsg', 'Please select a student and enter a subject.', true);
       return;
     }
+    if(ca1 < 0 || ca1 > 15 || ca2 < 0 || ca2 > 15 || exam < 0 || exam > 70){
+      showMsg('resultsMsg', 'CA1 and CA2 must be 0-15, and Exam must be 0-70.', true);
+      return;
+    }
 
-    const total = ca + exam;
+    const caScore = ca1 + ca2;
+    const total = caScore + exam;
     const gradeInfo = getGrade(total);
     const docId = studentId + '_' + subject.replace(/\s+/g,'') + '_' + term.replace(/\s+/g,'');
 
@@ -1268,20 +1300,136 @@
       subject: subject,
       term: term,
       session: portalSettings.currentSession,
-      caScore: ca,
+      ca1Score: ca1,
+      ca2Score: ca2,
+      caScore: caScore,
       examScore: exam,
       total: total,
       grade: gradeInfo.grade,
       remark: gradeInfo.remark,
+      generated: false,
+      released: false,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }).then(function(){
-      showMsg('resultsMsg', 'Result saved: ' + gradeInfo.grade + ' (' + total + '/100)', false);
-      document.getElementById('resSubject').value = '';
-      document.getElementById('resCA').value = '';
+    }, {merge:true}).then(function(){
+      showMsg('resultsMsg', 'Score submitted: ' + total + '/100. Awaiting admin approval before it appears on the student\'s report.', false);
+      document.getElementById('resCA1').value = '';
+      document.getElementById('resCA2').value = '';
       document.getElementById('resExam').value = '';
-      setTimeout(function(){ closeModal('resultsModal'); }, 1500);
+      setTimeout(function(){ closeModal('resultsModal'); }, 2000);
     }).catch(function(err){
       showMsg('resultsMsg', 'Error: ' + err.message, true);
+    });
+  }
+
+  // ============ RESULTS APPROVAL (ADMIN) ============
+  function openResultsApprovalModal(){
+    document.getElementById('approvalTermSelect').value = portalSettings.currentTerm;
+    document.getElementById('approvalList').innerHTML = '';
+    document.getElementById('approvalBulkActions').style.display = 'none';
+    db.collection('classes').get().then(function(snap){
+      const opts = ['<option value="">Select class...</option>'];
+      snap.forEach(function(doc){
+        const d = doc.data();
+        if(currentLevelFilter && d.level !== currentLevelFilter) return;
+        opts.push('<option value="'+e(d.name)+'">'+e(d.name)+'</option>');
+      });
+      document.getElementById('approvalClassSelect').innerHTML = opts.join('');
+    });
+    openModal('approvalModal');
+  }
+
+  function loadApprovalList(){
+    const className = document.getElementById('approvalClassSelect').value;
+    const term = document.getElementById('approvalTermSelect').value;
+    const listEl = document.getElementById('approvalList');
+    const bulkEl = document.getElementById('approvalBulkActions');
+
+    if(!className){
+      listEl.innerHTML = '';
+      bulkEl.style.display = 'none';
+      return;
+    }
+
+    listEl.innerHTML = '<p style="color:#8a7d68;font-size:13px;">Loading...</p>';
+
+    db.collection('users').where('role','==','student').where('className','==',className).get().then(function(studentsSnap){
+      const studentIds = [];
+      const studentNames = {};
+      studentsSnap.forEach(function(doc){ studentIds.push(doc.id); studentNames[doc.id] = doc.data().name; });
+
+      if(studentIds.length === 0){
+        listEl.innerHTML = '<p style="color:#8a7d68;font-size:13px;">No students in this class.</p>';
+        bulkEl.style.display = 'none';
+        return;
+      }
+
+      db.collection('results').where('term','==',term).get().then(function(resSnap){
+        let html = '';
+        let found = 0;
+        resSnap.forEach(function(doc){
+          const d = doc.data();
+          if(studentIds.indexOf(d.studentId) === -1) return;
+          found++;
+          const statusBadge = d.released
+            ? '<span style="color:#2a6b2a;font-weight:bold;">Released</span>'
+            : (d.generated ? '<span style="color:#8a5a00;font-weight:bold;">Generated</span>' : '<span style="color:#c0392b;font-weight:bold;">Pending</span>');
+          html += '<div class="list-item">'
+            + '<div class="top-row"><span style="font-weight:bold;">'+e(studentNames[d.studentId]||'Unknown')+'</span><span>'+statusBadge+'</span></div>'
+            + '<div class="sub-row">'+e(d.subject)+' &middot; CA1:'+d.ca1Score+' CA2:'+d.ca2Score+' Exam:'+d.examScore+' &middot; Total:'+d.total+' ('+e(d.grade)+')</div>'
+            + '<div style="display:flex;gap:8px;margin-top:8px;">'
+            + '<button onclick="setResultStatus(\''+doc.id+'\', \'generated\')" style="flex:1;padding:6px;border:none;border-radius:6px;background:#e8e0f5;color:#4a2e8a;font-weight:bold;">Generate</button>'
+            + '<button onclick="setResultStatus(\''+doc.id+'\', \'released\')" style="flex:1;padding:6px;border:none;border-radius:6px;background:#d9f0d9;color:#2a6b2a;font-weight:bold;">Release</button>'
+            + '<button onclick="setResultStatus(\''+doc.id+'\', \'withheld\')" style="flex:1;padding:6px;border:none;border-radius:6px;background:#f8d7da;color:#721c24;font-weight:bold;">Withhold</button>'
+            + '</div></div>';
+        });
+        listEl.innerHTML = html || '<p style="color:#8a7d68;font-size:13px;">No scores submitted yet for this class/term.</p>';
+        bulkEl.style.display = found > 0 ? 'flex' : 'none';
+      });
+    }).catch(function(err){ listEl.innerHTML = '<p style="color:#c0392b;">Error: '+err.message+'</p>'; });
+  }
+
+  function setResultStatus(resultId, action){
+    let update = {};
+    if(action === 'generated') update = { generated: true };
+    else if(action === 'released') update = { generated: true, released: true };
+    else if(action === 'withheld') update = { released: false };
+
+    db.collection('results').doc(resultId).update(update).then(function(){
+      loadApprovalList();
+    }).catch(function(err){ showMsg('approvalMsg', 'Error: ' + err.message, true); });
+  }
+
+  function bulkApprovalAction(action){
+    const className = document.getElementById('approvalClassSelect').value;
+    const term = document.getElementById('approvalTermSelect').value;
+    if(!className) return;
+
+    db.collection('users').where('role','==','student').where('className','==',className).get().then(function(studentsSnap){
+      const studentIds = [];
+      studentsSnap.forEach(function(doc){ studentIds.push(doc.id); });
+
+      db.collection('results').where('term','==',term).get().then(function(resSnap){
+        const batch = db.batch();
+        let count = 0;
+        resSnap.forEach(function(doc){
+          const d = doc.data();
+          if(studentIds.indexOf(d.studentId) === -1) return;
+          let update = {};
+          if(action === 'generate') update = { generated: true };
+          else if(action === 'release') update = { generated: true, released: true };
+          else if(action === 'withhold') update = { released: false };
+          batch.update(doc.ref, update);
+          count++;
+        });
+        if(count === 0){
+          showMsg('approvalMsg', 'No results found for this class/term.', true);
+          return;
+        }
+        batch.commit().then(function(){
+          showMsg('approvalMsg', action.charAt(0).toUpperCase()+action.slice(1)+'d ' + count + ' result(s).', false);
+          loadApprovalList();
+        }).catch(function(err){ showMsg('approvalMsg', 'Error: ' + err.message, true); });
+      });
     });
   }
 
@@ -1858,17 +2006,22 @@
       let total = 0, count = 0;
       res[1].forEach(function(doc){
         const d = doc.data();
+        const statusBadge = d.released
+          ? '<span style="color:#2a6b2a;font-weight:bold;">Released</span>'
+          : '<span style="color:#c0392b;font-weight:bold;">Withheld</span>';
         rows += '<tr><td style="padding:6px;border-bottom:1px solid #eee2cc;">'+e(d.subject)+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.caScore+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+(d.ca1Score!=null?d.ca1Score:'-')+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+(d.ca2Score!=null?d.ca2Score:'-')+'</td>'
           + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.examScore+'</td>'
           + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+d.total+'</td>'
-          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+e(d.grade)+'</td></tr>';
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+e(d.grade)+'</td>'
+          + '<td style="padding:6px;border-bottom:1px solid #eee2cc;text-align:center;">'+statusBadge+'</td></tr>';
         total += d.total; count++;
       });
       const avg = count > 0 ? (total/count).toFixed(1) : 0;
       let html = '<h4 style="color:var(--maroon);">'+e(stu.name)+' — '+e(stu.className||'')+'</h4>'
         + '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
-        + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Subject</th><th style="padding:6px;">CA</th><th style="padding:6px;">Exam</th><th style="padding:6px;">Total</th><th style="padding:6px;">Grade</th></tr>'
+        + '<tr style="background:var(--cream);"><th style="padding:6px;text-align:left;">Subject</th><th style="padding:6px;">CA1</th><th style="padding:6px;">CA2</th><th style="padding:6px;">Exam</th><th style="padding:6px;">Total</th><th style="padding:6px;">Grade</th><th style="padding:6px;">Status</th></tr>'
         + rows + '</table>'
         + '<p style="margin-top:10px;font-weight:bold;color:var(--maroon);">Average: '+avg+'</p>';
       document.getElementById('reportCardContainer').innerHTML = html || '<p>No results yet.</p>';
