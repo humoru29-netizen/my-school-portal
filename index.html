@@ -632,6 +632,7 @@ const db = firebase.firestore();
 // so that creating a user doesn't log the admin out of their own session.
 const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = secondaryApp.auth();
+const secondaryDb = secondaryApp.firestore();
 
 // These start with sensible defaults, but are overwritten from Firestore
 // on login (see loadPortalSettingsIntoMemory) once an admin manages them
@@ -801,12 +802,12 @@ async function submitSelfSignup(){
   try{
     const cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
     const uid = cred.user.uid;
-    await secondaryAuth.signOut();
-    await db.collection("users").doc(uid).set({
+    await secondaryDb.collection("users").doc(uid).set({
       name, email, role: "pending", status: "pending",
       requestedRole: role, requestedLevel: level,
       createdAt: new Date().toISOString(), selfRegistered: true
     });
+    await secondaryAuth.signOut();
     closeSignup();
     document.getElementById("loginError").style.color = "#176b3a";
     document.getElementById("loginError").textContent = "Account request submitted. An administrator must approve it before you can sign in.";
