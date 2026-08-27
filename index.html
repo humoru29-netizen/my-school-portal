@@ -734,6 +734,12 @@ function js(v){
   return JSON.stringify(v).replace(/"/g, "&quot;");
 }
 
+function esc(str){
+  return String(str == null ? "" : str).replace(/[&<>"']/g, function(m){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];
+  });
+}
+
 // The school's actual hand-painted crest, embedded so it's always
 // available inside standalone print tabs (which have no relative path
 // back to the site's own asset files).
