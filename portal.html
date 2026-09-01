@@ -1329,6 +1329,10 @@ function renderGeneralAdmin(view){
           <div class="icon">🔑</div>
           <div class="label">Generate Result PINs</div>
         </div>
+        <div class="tile" onclick="openFixAdmissionSessions('both')">
+          <div class="icon">🛠️</div>
+          <div class="label">Fix Admission No. Sessions</div>
+        </div>
       </div>
       <div class="section-title">Accounts</div>
       <div class="card-grid">
@@ -1473,6 +1477,10 @@ function levelAdminTiles(level){
       <div class="tile" onclick="openBulkGeneratePins('${lvl}')">
         <div class="icon">🔑</div>
         <div class="label">Generate Result PINs</div>
+      </div>
+      <div class="tile" onclick="openFixAdmissionSessions('${lvl}')">
+        <div class="icon">🛠️</div>
+        <div class="label">Fix Admission No. Sessions</div>
       </div>
     </div>
   `;
@@ -4601,6 +4609,95 @@ function printBulkPins(students){
     </table>
     <p>${students.length} PIN${students.length === 1 ? "" : "s"} generated. Keep this list secure — it grants access to results.</p>
   `);
+}
+
+/* ================= FIX ADMISSION NUMBER SESSIONS =================
+   One-time cleanup: finds any student whose Admission Number was
+   generated before Portal Settings had a real academic session saved
+   (they'll show "0000/0000" in place of e.g. "2025/2026") and
+   regenerates a fresh number using the current session. The PIN
+   itself is kept unchanged — only the admission number is replaced —
+   and the resultLookup entry is moved to the new ID so "Check My
+   Result" keeps working without interruption.
+*/
+function openFixAdmissionSessions(level){
+  const main = document.getElementById("mainContent");
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
+    <div class="section-title" style="margin-top:12px;">Fix Admission No. Sessions</div>
+    <div class="placeholder-note">Finds any student whose Admission Number uses a placeholder session (0000/0000) — usually because Portal Settings didn't have a session saved yet when it was generated — and replaces it with a fresh number using the current session. PINs are kept unchanged.</div>
+    <button class="btn-primary" style="margin-top:12px;" onclick="runFixAdmissionSessions('${level}')">Find &amp; Fix Now</button>
+    <div class="field-error" id="fixSessionError"></div>
+    <div id="fixSessionResultsArea" style="margin-top:16px;"></div>
+  `;
+}
+
+async function runFixAdmissionSessions(level){
+  const errBox = document.getElementById("fixSessionError");
+  const area = document.getElementById("fixSessionResultsArea");
+  errBox.textContent = "";
+
+  if(!defaultSession || !defaultSession.trim() || defaultSession.trim() === "0000/0000"){
+    errBox.textContent = "Portal Settings doesn't have a real academic session saved yet. Set that first (e.g. 2025/2026), then run this again.";
+    return;
+  }
+
+  area.innerHTML = `<div class="placeholder-note">Checking student list...</div>`;
+
+  try{
+    let query = db.collection("users").where("role","==","student");
+    if(level !== "both") query = query.where("level","==",level);
+    const snap = await query.get();
+
+    let students = [];
+    snap.forEach(doc => students.push({ uid: doc.id, ...doc.data() }));
+
+    const affected = students.filter(s => s.admissionNo && s.admissionNo.includes("0000/0000"));
+
+    const fixed = [];
+    for(const s of affected){
+      const oldAdmissionNo = s.admissionNo;
+      const newAdmissionNo = await generateNextAdmissionNo();
+
+      await db.collection("users").doc(s.uid).update({ admissionNo: newAdmissionNo });
+
+      if(s.resultPin){
+        await db.collection("resultLookup").doc(resultLookupId(oldAdmissionNo, s.resultPin)).delete();
+        await db.collection("resultLookup").doc(resultLookupId(newAdmissionNo, s.resultPin)).set({
+          studentUid: s.uid, name: s.name, level: s.level || null, class: s.class || null, admissionNo: newAdmissionNo
+        });
+      }
+
+      fixed.push({ ...s, oldAdmissionNo, admissionNo: newAdmissionNo });
+    }
+
+    if(fixed.length === 0){
+      area.innerHTML = `<div class="placeholder-note">✅ Nothing to fix — no students found with a placeholder session in their Admission Number.</div>`;
+      return;
+    }
+
+    const rowsHTML = fixed.map(s => `
+      <tr><td>${esc(s.name || "")}</td><td>${esc(s.oldAdmissionNo)}</td><td>${esc(s.admissionNo)}</td></tr>
+    `).join("");
+
+    area.innerHTML = `
+      <div class="section-title">Done</div>
+      <div style="margin-bottom:8px;">✅ ${fixed.length} student${fixed.length === 1 ? "" : "s"} corrected.</div>
+      <div style="overflow-x:auto; margin-top:12px;">
+        <table style="width:100%; border-collapse:collapse;">
+          <tr style="border-bottom:2px solid var(--gray-line);">
+            <th style="text-align:left; padding:6px;">Name</th>
+            <th style="text-align:left; padding:6px;">Old Admission No.</th>
+            <th style="text-align:left; padding:6px;">New Admission No.</th>
+          </tr>
+          ${rowsHTML}
+        </table>
+      </div>
+      <div style="margin-top:12px; color:#666; font-size:13px;">PINs were kept the same — only the Admission Number changed. Update any printed slips for these students.</div>
+    `;
+  } catch(e){
+    errBox.textContent = "Error fixing admission numbers: " + e.message;
+  }
 }
 
 function openMasterList(level){
