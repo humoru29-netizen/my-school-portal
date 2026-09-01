@@ -691,6 +691,29 @@ function resultLookupId(admissionNo, pin){
   return `${clean(admissionNo)}_${clean(pin)}`;
 }
 
+// Auto-generates the next Admission Number in sequence, scoped to the
+// current academic session, in the format FISS/YYYY/YYYY/NNNNN
+// (e.g. FISS/2025/2026/00002). Uses a Firestore transaction against a
+// counters/admissionNumbers document so two students created back-to-back
+// — even from different phones at the same moment — can never collide
+// on the same number.
+async function generateNextAdmissionNo(){
+  const session = defaultSession && defaultSession.trim() ? defaultSession.trim() : "0000/0000";
+  const counterId = session.replace(/\//g, "-"); // Firestore doc IDs can't contain "/"
+  const counterRef = db.collection("counters").doc("admissionNumbers_" + counterId);
+
+  const nextNumber = await db.runTransaction(async (tx) => {
+    const doc = await tx.get(counterRef);
+    const current = doc.exists ? (doc.data().lastNumber || 0) : 0;
+    const next = current + 1;
+    tx.set(counterRef, { lastNumber: next, session }, { merge: true });
+    return next;
+  });
+
+  const padded = String(nextNumber).padStart(5, "0");
+  return `FISS/${session}/${padded}`;
+}
+
 // Surfaces any JS error as a visible alert instead of failing silently.
 // This is what "Submit for Approval" and "Load CA List" needed —
 // on mobile there's no easy way to check a browser console, so this
@@ -1691,22 +1714,21 @@ function renderManageAccountsList(users, activeClassFilter){
 }
 
 async function setStudentPin(uid, name){
-  const admissionNo = prompt(`Enter Admission Number for ${name}:`);
-  if(!admissionNo || !admissionNo.trim()) return;
-
-  const pin = generateResultPin();
-  const trimmedAdm = admissionNo.trim();
+  if(!confirm(`Auto-assign the next Admission Number and a Result PIN to ${name}?`)) return;
 
   try{
+    const admissionNo = await generateNextAdmissionNo();
+    const pin = generateResultPin();
+
     const userDoc = await db.collection("users").doc(uid).get();
     const u = userDoc.data();
 
-    await db.collection("users").doc(uid).update({ admissionNo: trimmedAdm, resultPin: pin });
-    await db.collection("resultLookup").doc(resultLookupId(trimmedAdm, pin)).set({
-      studentUid: uid, name: u.name, level: u.level || null, class: u.class || null, admissionNo: trimmedAdm
+    await db.collection("users").doc(uid).update({ admissionNo, resultPin: pin });
+    await db.collection("resultLookup").doc(resultLookupId(admissionNo, pin)).set({
+      studentUid: uid, name: u.name, level: u.level || null, class: u.class || null, admissionNo
     });
 
-    alert(`Done. Admission Number: ${trimmedAdm}\nResult PIN: ${pin}\n\nWrite these down now — share them with the student's parent/guardian for the public "Check My Result" feature.`);
+    alert(`Done. Admission Number: ${admissionNo}\nResult PIN: ${pin}\n\nWrite these down now — share them with the student's parent/guardian for the public "Check My Result" feature.`);
     openManageAccounts(manageAccountsContext);
   } catch(e){
     alert("Error setting PIN: " + e.message);
@@ -2927,8 +2949,8 @@ function onRoleChange(context){
         </select>
       </div>
       <div class="form-group">
-        <label>Admission Number</label>
-        <input type="text" id="accAdmissionNo" placeholder="e.g. FIS/2026/014">
+        <label>Admission Number (auto-generated)</label>
+        <input type="text" id="accAdmissionNo" value="Generating..." readonly>
       </div>
       <div class="form-group">
         <label>Date of Birth</label>
@@ -2996,6 +3018,17 @@ function onRoleChange(context){
   }
 
   assignmentArea.innerHTML = assignmentHTML;
+
+  if(role === "student"){
+    generateNextAdmissionNo().then(admNo => {
+      const field = document.getElementById("accAdmissionNo");
+      if(field) field.value = admNo;
+    }).catch(e => {
+      const field = document.getElementById("accAdmissionNo");
+      if(field) field.value = "Error — please retry";
+      console.error("Admission number generation failed:", e);
+    });
+  }
   contactArea.innerHTML = contactHTML + `
     <div class="form-group">
       <label>Password (auto-generated — you can edit)</label>
@@ -3072,8 +3105,8 @@ async function submitCreateAccount(context){
     level = PRIMARY_CLASSES.includes(classAssigned) ? "primary" : "secondary";
 
     admissionNo = document.getElementById("accAdmissionNo").value.trim();
-    if(!admissionNo){
-      errBox.textContent = "Please enter an Admission Number.";
+    if(!admissionNo || admissionNo === "Generating..." || admissionNo.startsWith("Error")){
+      errBox.textContent = "Admission Number is still being generated — please wait a moment and try again.";
       return;
     }
     dob = document.getElementById("accDob").value;
@@ -3254,12 +3287,20 @@ async function submitBulkAddStudents(){
       const uid = cred.user.uid;
       await secondaryAuth.signOut();
 
+      const admissionNo = await generateNextAdmissionNo();
+      const resultPin = generateResultPin();
+
       await db.collection("users").doc(uid).set({
         name, email: username, role: "student", level, class: classAssigned,
+        admissionNo, resultPin,
         createdAt: new Date().toISOString(), createdBy: currentUser.uid
       });
 
-      results.push({ name, username, password, status: "ok" });
+      await db.collection("resultLookup").doc(resultLookupId(admissionNo, resultPin)).set({
+        studentUid: uid, name, level, class: classAssigned, admissionNo
+      });
+
+      results.push({ name, username, password, admissionNo, resultPin, status: "ok" });
     } catch(e){
       results.push({ name, username, password, status: "error", message: e.message });
     }
@@ -3276,7 +3317,7 @@ function renderBulkResults(results, classAssigned){
   const errorRows = results.filter(r => r.status === "error");
 
   const rowHTML = (r) => `
-    <div class="cred-row"><span class="k">${r.name}</span><span class="v">${r.username} · ${r.password}</span></div>
+    <div class="cred-row"><span class="k">${r.name}</span><span class="v">${r.username} · ${r.password}${r.admissionNo ? ` · ${r.admissionNo} · PIN ${r.resultPin}` : ""}</span></div>
   `;
 
   progressArea.innerHTML = `
@@ -4481,7 +4522,7 @@ function openBulkGeneratePins(level){
   main.innerHTML = `
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">Generate Result PINs</div>
-    <div class="placeholder-note">This gives a Result Check PIN to every registered student${level !== "both" ? ` in ${level === "primary" ? "Primary" : "Secondary"}` : ""} who doesn't already have one. Existing PINs are left untouched — this only fills in the gaps.</div>
+    <div class="placeholder-note">This gives every registered student${level !== "both" ? ` in ${level === "primary" ? "Primary" : "Secondary"}` : ""} an Admission Number and Result PIN — automatically, in one pass. Students who already have both are left untouched.</div>
     <button class="btn-primary" style="margin-top:12px;" onclick="runBulkGeneratePins('${level}')">Generate Missing PINs Now</button>
     <div class="field-error" id="bulkPinError"></div>
     <div id="bulkPinResultsArea" style="margin-top:16px;"></div>
@@ -4503,17 +4544,21 @@ async function runBulkGeneratePins(level){
     snap.forEach(doc => students.push({ uid: doc.id, ...doc.data() }));
 
     const alreadyHadPin = students.filter(s => s.resultPin && s.admissionNo);
-    const missingAdmissionNo = students.filter(s => !s.admissionNo);
-    const needsPin = students.filter(s => s.admissionNo && !s.resultPin);
+    const needsProcessing = students.filter(s => !s.resultPin || !s.admissionNo);
 
     const generated = [];
-    for(const s of needsPin){
-      const pin = generateResultPin();
-      await db.collection("users").doc(s.uid).update({ resultPin: pin });
-      await db.collection("resultLookup").doc(resultLookupId(s.admissionNo, pin)).set({
-        studentUid: s.uid, name: s.name, level: s.level || null, class: s.class || null, admissionNo: s.admissionNo
+    for(const s of needsProcessing){
+      // Assign an admission number first if this student doesn't have
+      // one yet — every registered student gets both, in one pass,
+      // rather than being skipped and requiring a separate manual step.
+      const admissionNo = s.admissionNo || await generateNextAdmissionNo();
+      const pin = s.resultPin || generateResultPin();
+
+      await db.collection("users").doc(s.uid).update({ admissionNo, resultPin: pin });
+      await db.collection("resultLookup").doc(resultLookupId(admissionNo, pin)).set({
+        studentUid: s.uid, name: s.name, level: s.level || null, class: s.class || null, admissionNo
       });
-      generated.push({ ...s, resultPin: pin });
+      generated.push({ ...s, admissionNo, resultPin: pin });
     }
 
     const rowsHTML = generated.map(s => `
@@ -4522,9 +4567,8 @@ async function runBulkGeneratePins(level){
 
     area.innerHTML = `
       <div class="section-title">Done</div>
-      <div style="margin-bottom:8px;">✅ ${generated.length} new PIN${generated.length === 1 ? "" : "s"} generated.</div>
-      <div style="margin-bottom:8px;">ℹ️ ${alreadyHadPin.length} student${alreadyHadPin.length === 1 ? "" : "s"} already had a PIN — left unchanged.</div>
-      ${missingAdmissionNo.length > 0 ? `<div style="margin-bottom:8px; color:#b00020;">⚠️ ${missingAdmissionNo.length} student${missingAdmissionNo.length === 1 ? "" : "s"} skipped — no Admission Number on file yet (${missingAdmissionNo.map(s => esc(s.name || "unnamed")).join(", ")}). Use "Set PIN" for these in Manage Accounts.</div>` : ""}
+      <div style="margin-bottom:8px;">✅ ${generated.length} student${generated.length === 1 ? "" : "s"} given an Admission Number and/or PIN.</div>
+      <div style="margin-bottom:8px;">ℹ️ ${alreadyHadPin.length} student${alreadyHadPin.length === 1 ? "" : "s"} already had both — left unchanged.</div>
       ${generated.length > 0 ? `
         <div style="overflow-x:auto; margin-top:12px;">
           <table style="width:100%; border-collapse:collapse;">
