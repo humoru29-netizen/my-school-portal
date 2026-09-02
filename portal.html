@@ -4587,11 +4587,20 @@ async function runBulkGeneratePins(level){
       <tr><td>${esc(s.name || "")}</td><td>${esc(s.class || "")}</td><td>${esc(s.admissionNo || "")}</td><td>${esc(s.resultPin)}</td></tr>
     `).join("");
 
+    // Combine both groups so the admin can always see (and print) every
+    // student's Admission Number + PIN in one place — not just the ones
+    // that were newly generated this run.
+    const allStudents = [...generated, ...alreadyHadPin].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+    const allRowsHTML = allStudents.map(s => `
+      <tr><td>${esc(s.name || "")}</td><td>${esc(s.class || "")}</td><td>${esc(s.admissionNo || "")}</td><td>${esc(s.resultPin)}</td></tr>
+    `).join("");
+
     area.innerHTML = `
       <div class="section-title">Done</div>
       <div style="margin-bottom:8px;">✅ ${generated.length} student${generated.length === 1 ? "" : "s"} given an Admission Number and/or PIN${classFilter ? ` in ${esc(classFilter)}` : ""}.</div>
       <div style="margin-bottom:8px;">ℹ️ ${alreadyHadPin.length} student${alreadyHadPin.length === 1 ? "" : "s"} already had both — left unchanged.</div>
-      ${generated.length > 0 ? `
+      ${allStudents.length > 0 ? `
+        <div class="section-title" style="margin-top:16px;">All Students${classFilter ? ` — ${esc(classFilter)}` : ""}</div>
         <div style="overflow-x:auto; margin-top:12px;">
           <table style="width:100%; border-collapse:collapse;">
             <tr style="border-bottom:2px solid var(--gray-line);">
@@ -4600,10 +4609,10 @@ async function runBulkGeneratePins(level){
               <th style="text-align:left; padding:6px;">Admission No.</th>
               <th style="text-align:left; padding:6px;">PIN</th>
             </tr>
-            ${rowsHTML}
+            ${allRowsHTML}
           </table>
         </div>
-        <button class="btn-primary" style="margin-top:12px;" onclick="printBulkPins(${js(generated)})">🖨️ Print PIN List</button>
+        <button class="btn-primary" style="margin-top:12px;" onclick="printBulkPins(${js(allStudents)})">🖨️ Print PIN List</button>
       ` : ""}
     `;
   } catch(e){
