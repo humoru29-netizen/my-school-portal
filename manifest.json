@@ -2,6 +2,7 @@
   "name": "Faith International School Portal",
   "short_name": "FIS Portal",
   "description": "School management portal for Faith International School, Itobe — results, students, fees, and administration.",
+  "id": "/portal.html",
   "start_url": "./portal.html",
   "display": "standalone",
   "orientation": "any",
