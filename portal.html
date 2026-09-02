@@ -682,6 +682,15 @@ function generateResultPin(){
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+// A PIN is only valid for the term+session it was issued in — once
+// Portal Settings moves to a new term (a new WAEC-style term begins),
+// old PINs stop working automatically. This is checked at lookup time
+// rather than by deleting old data immediately, so nothing breaks if
+// Portal Settings hasn't been updated yet when a term actually changes.
+function isCurrentTerm(term, session){
+  return term === defaultTerm && session === defaultSession;
+}
+
 // Builds the resultLookup document ID from an admission number + PIN.
 // Forward slashes are common in admission numbers (e.g. "FIS/2026/014")
 // and are illegal in Firestore document IDs, so they're sanitized here —
@@ -944,6 +953,21 @@ async function submitCheckResult(){
       return;
     }
     const info = lookupDoc.data();
+
+    // This runs before any login, so the global defaultTerm/defaultSession
+    // (only populated after sign-in) aren't available here — fetch the
+    // live term/session directly instead, and reject any PIN that was
+    // issued for a term that's since ended. This is what makes PINs
+    // automatically expire when the school moves to a new term, without
+    // needing to delete old data the moment a term changes.
+    const settingsDoc = await db.collection("settings").doc("current").get();
+    const liveTerm = settingsDoc.exists ? (settingsDoc.data().term || "") : "";
+    const liveSession = settingsDoc.exists ? (settingsDoc.data().session || "") : "";
+
+    if(info.term !== liveTerm || info.session !== liveSession){
+      errBox.textContent = "This PIN was issued for a previous term and has expired. Please contact the school office for a new PIN.";
+      return;
+    }
 
     const snap = await db.collection("results")
       .where("studentUid","==",info.studentUid).where("released","==",true)
@@ -1325,9 +1349,13 @@ function renderGeneralAdmin(view){
           <div class="icon">👥</div>
           <div class="label">Student Roster</div>
         </div>
+        <div class="tile" onclick="openBulkAssignAdmissionNumbers('both')">
+          <div class="icon">🆔</div>
+          <div class="label">Assign Admission Numbers</div>
+        </div>
         <div class="tile" onclick="openBulkGeneratePins('both')">
           <div class="icon">🔑</div>
-          <div class="label">Generate Result PINs</div>
+          <div class="label">Generate/Refresh PINs</div>
         </div>
         <div class="tile" onclick="openFixAdmissionSessions('both')">
           <div class="icon">🛠️</div>
@@ -1474,9 +1502,13 @@ function levelAdminTiles(level){
         <div class="icon">👥</div>
         <div class="label">Student Roster</div>
       </div>
+      <div class="tile" onclick="openBulkAssignAdmissionNumbers('${lvl}')">
+        <div class="icon">🆔</div>
+        <div class="label">Assign Admission Numbers</div>
+      </div>
       <div class="tile" onclick="openBulkGeneratePins('${lvl}')">
         <div class="icon">🔑</div>
-        <div class="label">Generate Result PINs</div>
+        <div class="label">Generate/Refresh PINs</div>
       </div>
       <div class="tile" onclick="openFixAdmissionSessions('${lvl}')">
         <div class="icon">🛠️</div>
@@ -1673,8 +1705,9 @@ function renderManageAccountsList(users, activeClassFilter){
           ${u.subjects ? " · " + u.subjects.join(", ") : ""}
         </div>
       </div>
-      <div style="display:flex; gap:8px; flex-shrink:0;">
-        ${u.role === "student" && (!u.admissionNo || !u.resultPin) ? `<button class="btn-secondary" style="color:#0a7748;" onclick="setStudentPin('${u.uid}', ${js(u.name || "this student")})">Set PIN</button>` : ""}
+      <div style="display:flex; gap:8px; flex-shrink:0; flex-wrap:wrap;">
+        ${u.role === "student" && !u.admissionNo ? `<button class="btn-secondary" style="color:#0a7748;" onclick="assignAdmissionNumber('${u.uid}', ${js(u.name || "this student")})">Assign Admission No.</button>` : ""}
+        ${u.role === "student" && u.admissionNo && (!u.resultPin || !isCurrentTerm(u.resultPinTerm, u.resultPinSession)) ? `<button class="btn-secondary" style="color:#0a7748;" onclick="generateStudentPin('${u.uid}', ${js(u.name || "this student")})">${u.resultPin ? "Refresh PIN" : "Generate PIN"}</button>` : ""}
         <button class="btn-secondary" onclick="openEditAccountModal('${u.uid}')">Edit</button>
         <button class="btn-secondary" style="color:#b00020;" onclick="removeAccountConfirm('${u.uid}', ${js(u.name || "this user")})">Remove</button>
       </div>
@@ -1721,25 +1754,51 @@ function renderManageAccountsList(users, activeClassFilter){
   }
 }
 
-async function setStudentPin(uid, name){
-  if(!confirm(`Auto-assign the next Admission Number and a Result PIN to ${name}?`)) return;
+async function assignAdmissionNumber(uid, name){
+  if(!confirm(`Assign the next Admission Number to ${name}?`)) return;
 
   try{
     const admissionNo = await generateNextAdmissionNo();
-    const pin = generateResultPin();
+    await db.collection("users").doc(uid).update({ admissionNo });
+    alert(`Done. Admission Number: ${admissionNo}\n\nThis is permanent and won't change. To give this student a Result PIN, use "Generate PIN" next.`);
+    openManageAccounts(manageAccountsContext);
+  } catch(e){
+    alert("Error assigning admission number: " + e.message);
+  }
+}
 
+async function generateStudentPin(uid, name){
+  if(!confirm(`Generate a new Result PIN for ${name}, valid for ${defaultTerm || "the current term"} — ${defaultSession || "current session"}?\n\nAny previous PIN for this student will stop working.`)) return;
+
+  try{
     const userDoc = await db.collection("users").doc(uid).get();
     const u = userDoc.data();
 
-    await db.collection("users").doc(uid).update({ admissionNo, resultPin: pin });
-    await db.collection("resultLookup").doc(resultLookupId(admissionNo, pin)).set({
-      studentUid: uid, name: u.name, level: u.level || null, class: u.class || null, admissionNo
+    if(!u.admissionNo){
+      alert("This student doesn't have an Admission Number yet. Assign one first.");
+      return;
+    }
+
+    const pin = generateResultPin();
+
+    // Remove the old resultLookup entry (if any) so a stale PIN from a
+    // previous term can never be used to look up results again.
+    if(u.resultPin){
+      await db.collection("resultLookup").doc(resultLookupId(u.admissionNo, u.resultPin)).delete();
+    }
+
+    await db.collection("users").doc(uid).update({
+      resultPin: pin, resultPinTerm: defaultTerm, resultPinSession: defaultSession
+    });
+    await db.collection("resultLookup").doc(resultLookupId(u.admissionNo, pin)).set({
+      studentUid: uid, name: u.name, level: u.level || null, class: u.class || null,
+      admissionNo: u.admissionNo, term: defaultTerm, session: defaultSession
     });
 
-    alert(`Done. Admission Number: ${admissionNo}\nResult PIN: ${pin}\n\nWrite these down now — share them with the student's parent/guardian for the public "Check My Result" feature.`);
+    alert(`Done. Result PIN: ${pin}\nValid for: ${defaultTerm || "current term"} — ${defaultSession || "current session"}\n\nWrite this down now — share it with the student's parent/guardian for "Check My Result". This PIN will stop working once the term changes.`);
     openManageAccounts(manageAccountsContext);
   } catch(e){
-    alert("Error setting PIN: " + e.message);
+    alert("Error generating PIN: " + e.message);
   }
 }
 
@@ -1871,12 +1930,14 @@ async function submitEditAccount(){
 
   const admissionNoField = document.getElementById("editAdmissionNo");
   const dobField = document.getElementById("editDob");
-  let oldAdmissionNo = null, oldResultPin = null;
+  let oldAdmissionNo = null, oldResultPin = null, oldResultPinTerm = null, oldResultPinSession = null;
   if(admissionNoField || dobField){
     const currentSnap = await db.collection("users").doc(editingUid).get();
     const currentData = currentSnap.data();
     oldAdmissionNo = currentData.admissionNo || null;
     oldResultPin = currentData.resultPin || null;
+    oldResultPinTerm = currentData.resultPinTerm || null;
+    oldResultPinSession = currentData.resultPinSession || null;
   }
   if(admissionNoField){
     const newAdmissionNo = admissionNoField.value.trim();
@@ -1910,7 +1971,9 @@ async function submitEditAccount(){
         name: updates.name,
         level: updates.level || null,
         class: updates.class || null,
-        admissionNo: newAdmissionNo
+        admissionNo: newAdmissionNo,
+        term: oldResultPinTerm,
+        session: oldResultPinSession
       });
     }
 
@@ -3174,14 +3237,19 @@ async function submitCreateAccount(context){
     if(classAssigned) profileData.class = classAssigned;
     if(subjectsAssigned) profileData.subjects = subjectsAssigned;
     if(admissionNo) profileData.admissionNo = admissionNo;
-    if(resultPin) profileData.resultPin = resultPin;
+    if(resultPin){
+      profileData.resultPin = resultPin;
+      profileData.resultPinTerm = defaultTerm;
+      profileData.resultPinSession = defaultSession;
+    }
     if(dob) profileData.dob = dob;
 
     await db.collection("users").doc(uid).set(profileData);
 
     if(role === "student" && admissionNo && resultPin){
       await db.collection("resultLookup").doc(resultLookupId(admissionNo, resultPin)).set({
-        studentUid: uid, name: name, level: level, class: classAssigned, admissionNo: admissionNo
+        studentUid: uid, name: name, level: level, class: classAssigned, admissionNo: admissionNo,
+        term: defaultTerm, session: defaultSession
       });
     }
 
@@ -3300,12 +3368,13 @@ async function submitBulkAddStudents(){
 
       await db.collection("users").doc(uid).set({
         name, email: username, role: "student", level, class: classAssigned,
-        admissionNo, resultPin,
+        admissionNo, resultPin, resultPinTerm: defaultTerm, resultPinSession: defaultSession,
         createdAt: new Date().toISOString(), createdBy: currentUser.uid
       });
 
       await db.collection("resultLookup").doc(resultLookupId(admissionNo, resultPin)).set({
-        studentUid: uid, name, level, class: classAssigned, admissionNo
+        studentUid: uid, name, level, class: classAssigned, admissionNo,
+        term: defaultTerm, session: defaultSession
       });
 
       results.push({ name, username, password, admissionNo, resultPin, status: "ok" });
@@ -4515,40 +4584,36 @@ function printStudentRoster(students, cls){
   `);
 }
 
-/* ================= BULK GENERATE RESULT PINS =================
-   Goes through every registered student and gives anyone missing
-   a PIN one automatically — used before exams/results so every
-   registered student's family can use "Check My Result" without
-   the admin having to do it one at a time.
-   Students missing an Admission Number are skipped and listed
-   separately, since a PIN is meaningless without one — those
-   still need the "Set PIN" button in Manage Accounts (which asks
-   for the Admission Number directly).
+/* ================= BULK ASSIGN ADMISSION NUMBERS =================
+   Admission Numbers are permanent — assigned once, never rotated.
+   This tool only ever fills gaps for students who don't have one yet;
+   it never touches PINs at all. Kept fully separate from PIN
+   generation since the two now have very different lifecycles.
 */
-function openBulkGeneratePins(level){
+function openBulkAssignAdmissionNumbers(level){
   const main = document.getElementById("mainContent");
   const classList = classListForLevel(level);
   main.innerHTML = `
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
-    <div class="section-title" style="margin-top:12px;">Generate Result PINs</div>
-    <div class="placeholder-note">This gives every registered student${level !== "both" ? ` in ${level === "primary" ? "Primary" : "Secondary"}` : ""} an Admission Number and Result PIN — automatically, in one pass. Students who already have both are left untouched.</div>
+    <div class="section-title" style="margin-top:12px;">Assign Admission Numbers</div>
+    <div class="placeholder-note">Gives every registered student${level !== "both" ? ` in ${level === "primary" ? "Primary" : "Secondary"}` : ""} a permanent Admission Number, if they don't already have one. This never changes once assigned — it's separate from Result PINs, which are regenerated every term.</div>
     <div class="form-group">
       <label>Class (optional)</label>
-      <select id="bulkPinClass">
+      <select id="bulkAdmClass">
         <option value="">All Classes${level !== "both" ? ` (${level === "primary" ? "Primary" : "Secondary"})` : ""}</option>
         ${classList.map(c => `<option value="${c}">${c}</option>`).join("")}
       </select>
     </div>
-    <button class="btn-primary" style="margin-top:12px;" onclick="runBulkGeneratePins('${level}')">Generate Admission Numbers &amp; PINs Now</button>
-    <div class="field-error" id="bulkPinError"></div>
-    <div id="bulkPinResultsArea" style="margin-top:16px;"></div>
+    <button class="btn-primary" style="margin-top:12px;" onclick="runBulkAssignAdmissionNumbers('${level}')">Assign Admission Numbers Now</button>
+    <div class="field-error" id="bulkAdmError"></div>
+    <div id="bulkAdmResultsArea" style="margin-top:16px;"></div>
   `;
 }
 
-async function runBulkGeneratePins(level){
-  const errBox = document.getElementById("bulkPinError");
-  const area = document.getElementById("bulkPinResultsArea");
-  const classFilter = document.getElementById("bulkPinClass").value;
+async function runBulkAssignAdmissionNumbers(level){
+  const errBox = document.getElementById("bulkAdmError");
+  const area = document.getElementById("bulkAdmResultsArea");
+  const classFilter = document.getElementById("bulkAdmClass").value;
   errBox.textContent = "";
   area.innerHTML = `<div class="placeholder-note">Working through student list...</div>`;
 
@@ -4559,48 +4624,129 @@ async function runBulkGeneratePins(level){
 
     let students = [];
     snap.forEach(doc => students.push({ uid: doc.id, ...doc.data() }));
-
-    // Filtered client-side (rather than a second .where("class",...) on the
-    // query) to avoid requiring a Firestore composite index for every
-    // level+class combination.
     if(classFilter) students = students.filter(s => s.class === classFilter);
 
-    const alreadyHadPin = students.filter(s => s.resultPin && s.admissionNo);
-    const needsProcessing = students.filter(s => !s.resultPin || !s.admissionNo);
-
-    const generated = [];
-    for(const s of needsProcessing){
-      // Assign an admission number first if this student doesn't have
-      // one yet — every registered student gets both, in one pass,
-      // rather than being skipped and requiring a separate manual step.
-      const admissionNo = s.admissionNo || await generateNextAdmissionNo();
-      const pin = s.resultPin || generateResultPin();
-
-      await db.collection("users").doc(s.uid).update({ admissionNo, resultPin: pin });
-      await db.collection("resultLookup").doc(resultLookupId(admissionNo, pin)).set({
-        studentUid: s.uid, name: s.name, level: s.level || null, class: s.class || null, admissionNo
-      });
-      generated.push({ ...s, admissionNo, resultPin: pin });
+    const needsAdmission = students.filter(s => !s.admissionNo);
+    const assigned = [];
+    for(const s of needsAdmission){
+      const admissionNo = await generateNextAdmissionNo();
+      await db.collection("users").doc(s.uid).update({ admissionNo });
+      assigned.push({ ...s, admissionNo });
     }
 
-    const rowsHTML = generated.map(s => `
-      <tr><td>${esc(s.name || "")}</td><td>${esc(s.class || "")}</td><td>${esc(s.admissionNo || "")}</td><td>${esc(s.resultPin)}</td></tr>
+    const rowsHTML = assigned.map(s => `
+      <tr><td>${esc(s.name || "")}</td><td>${esc(s.class || "")}</td><td>${esc(s.admissionNo)}</td></tr>
     `).join("");
 
-    // Combine both groups so the admin can always see (and print) every
-    // student's Admission Number + PIN in one place — not just the ones
-    // that were newly generated this run.
-    const allStudents = [...generated, ...alreadyHadPin].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
-    const allRowsHTML = allStudents.map(s => `
+    area.innerHTML = `
+      <div class="section-title">Done</div>
+      <div style="margin-bottom:8px;">✅ ${assigned.length} student${assigned.length === 1 ? "" : "s"} assigned an Admission Number${classFilter ? ` in ${esc(classFilter)}` : ""}.</div>
+      <div style="margin-bottom:8px;">ℹ️ ${students.length - assigned.length} student${(students.length - assigned.length) === 1 ? "" : "s"} already had one — left unchanged.</div>
+      ${assigned.length > 0 ? `
+        <div style="overflow-x:auto; margin-top:12px;">
+          <table style="width:100%; border-collapse:collapse;">
+            <tr style="border-bottom:2px solid var(--gray-line);">
+              <th style="text-align:left; padding:6px;">Name</th>
+              <th style="text-align:left; padding:6px;">Class</th>
+              <th style="text-align:left; padding:6px;">Admission No.</th>
+            </tr>
+            ${rowsHTML}
+          </table>
+        </div>
+        <div style="margin-top:12px; color:#666; font-size:13px;">Next, use "Generate/Refresh Result PINs" to give these students a PIN for the current term.</div>
+      ` : ""}
+    `;
+  } catch(e){
+    errBox.textContent = "Error assigning admission numbers: " + e.message;
+  }
+}
+
+/* ================= BULK GENERATE / REFRESH RESULT PINS =================
+   PINs are scoped to a single term. This tool gives a fresh PIN to
+   every student who either has none yet, or whose existing PIN was
+   issued for a past term (isCurrentTerm() catches this). Admission
+   Numbers are NOT touched here — students missing one are skipped
+   and listed, pointing to "Assign Admission Numbers" instead.
+*/
+function openBulkGeneratePins(level){
+  const main = document.getElementById("mainContent");
+  const classList = classListForLevel(level);
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
+    <div class="section-title" style="margin-top:12px;">Generate / Refresh Result PINs</div>
+    <div class="placeholder-note">Gives every registered student${level !== "both" ? ` in ${level === "primary" ? "Primary" : "Secondary"}` : ""} a Result PIN valid for the current term (${esc(defaultTerm || "not set")} — ${esc(defaultSession || "not set")}). Anyone whose PIN is from a past term gets a fresh one automatically — their old PIN stops working. Students without an Admission Number yet are skipped; use "Assign Admission Numbers" for them first.</div>
+    <div class="form-group">
+      <label>Class (optional)</label>
+      <select id="bulkPinClass">
+        <option value="">All Classes${level !== "both" ? ` (${level === "primary" ? "Primary" : "Secondary"})` : ""}</option>
+        ${classList.map(c => `<option value="${c}">${c}</option>`).join("")}
+      </select>
+    </div>
+    <button class="btn-primary" style="margin-top:12px;" onclick="runBulkGeneratePins('${level}')">Generate / Refresh PINs Now</button>
+    <div class="field-error" id="bulkPinError"></div>
+    <div id="bulkPinResultsArea" style="margin-top:16px;"></div>
+  `;
+}
+
+async function runBulkGeneratePins(level){
+  const errBox = document.getElementById("bulkPinError");
+  const area = document.getElementById("bulkPinResultsArea");
+  const classFilter = document.getElementById("bulkPinClass").value;
+  errBox.textContent = "";
+
+  if(!defaultTerm || !defaultSession){
+    errBox.textContent = "Portal Settings doesn't have a Term and Session saved yet. Set those first, then run this again.";
+    return;
+  }
+
+  area.innerHTML = `<div class="placeholder-note">Working through student list...</div>`;
+
+  try{
+    let query = db.collection("users").where("role","==","student");
+    if(level !== "both") query = query.where("level","==",level);
+    const snap = await query.get();
+
+    let students = [];
+    snap.forEach(doc => students.push({ uid: doc.id, ...doc.data() }));
+    if(classFilter) students = students.filter(s => s.class === classFilter);
+
+    const missingAdmission = students.filter(s => !s.admissionNo);
+    const withAdmission = students.filter(s => s.admissionNo);
+    const alreadyCurrent = withAdmission.filter(s => s.resultPin && isCurrentTerm(s.resultPinTerm, s.resultPinSession));
+    const needsRefresh = withAdmission.filter(s => !s.resultPin || !isCurrentTerm(s.resultPinTerm, s.resultPinSession));
+
+    const refreshed = [];
+    for(const s of needsRefresh){
+      const pin = generateResultPin();
+
+      // Remove the old lookup entry first, if one existed, so a stale
+      // PIN from a previous term can never be reused after this.
+      if(s.resultPin){
+        await db.collection("resultLookup").doc(resultLookupId(s.admissionNo, s.resultPin)).delete();
+      }
+
+      await db.collection("users").doc(s.uid).update({
+        resultPin: pin, resultPinTerm: defaultTerm, resultPinSession: defaultSession
+      });
+      await db.collection("resultLookup").doc(resultLookupId(s.admissionNo, pin)).set({
+        studentUid: s.uid, name: s.name, level: s.level || null, class: s.class || null,
+        admissionNo: s.admissionNo, term: defaultTerm, session: defaultSession
+      });
+      refreshed.push({ ...s, resultPin: pin });
+    }
+
+    const allCurrent = [...refreshed, ...alreadyCurrent].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+    const rowsHTML = allCurrent.map(s => `
       <tr><td>${esc(s.name || "")}</td><td>${esc(s.class || "")}</td><td>${esc(s.admissionNo || "")}</td><td>${esc(s.resultPin)}</td></tr>
     `).join("");
 
     area.innerHTML = `
       <div class="section-title">Done</div>
-      <div style="margin-bottom:8px;">✅ ${generated.length} student${generated.length === 1 ? "" : "s"} given an Admission Number and/or PIN${classFilter ? ` in ${esc(classFilter)}` : ""}.</div>
-      <div style="margin-bottom:8px;">ℹ️ ${alreadyHadPin.length} student${alreadyHadPin.length === 1 ? "" : "s"} already had both — left unchanged.</div>
-      ${allStudents.length > 0 ? `
-        <div class="section-title" style="margin-top:16px;">All Students${classFilter ? ` — ${esc(classFilter)}` : ""}</div>
+      <div style="margin-bottom:8px;">✅ ${refreshed.length} student${refreshed.length === 1 ? "" : "s"} given a fresh PIN for ${esc(defaultTerm)} — ${esc(defaultSession)}${classFilter ? ` in ${esc(classFilter)}` : ""}.</div>
+      <div style="margin-bottom:8px;">ℹ️ ${alreadyCurrent.length} student${alreadyCurrent.length === 1 ? "" : "s"} already had a current PIN — left unchanged.</div>
+      ${missingAdmission.length > 0 ? `<div style="margin-bottom:8px; color:#b00020;">⚠️ ${missingAdmission.length} student${missingAdmission.length === 1 ? "" : "s"} skipped — no Admission Number yet. Use "Assign Admission Numbers" for them first.</div>` : ""}
+      ${allCurrent.length > 0 ? `
+        <div class="section-title" style="margin-top:16px;">All Students With a Current PIN${classFilter ? ` — ${esc(classFilter)}` : ""}</div>
         <div style="overflow-x:auto; margin-top:12px;">
           <table style="width:100%; border-collapse:collapse;">
             <tr style="border-bottom:2px solid var(--gray-line);">
@@ -4609,10 +4755,10 @@ async function runBulkGeneratePins(level){
               <th style="text-align:left; padding:6px;">Admission No.</th>
               <th style="text-align:left; padding:6px;">PIN</th>
             </tr>
-            ${allRowsHTML}
+            ${rowsHTML}
           </table>
         </div>
-        <button class="btn-primary" style="margin-top:12px;" onclick="printBulkPins(${js(allStudents)})">🖨️ Print PIN List</button>
+        <button class="btn-primary" style="margin-top:12px;" onclick="printBulkPins(${js(allCurrent)})">🖨️ Print PIN List</button>
       ` : ""}
     `;
   } catch(e){
@@ -4625,13 +4771,14 @@ function printBulkPins(students){
     <tr><td>${esc(s.name || "")}</td><td>${esc(s.class || "")}</td><td>${esc(s.admissionNo || "")}</td><td>${esc(s.resultPin)}</td></tr>
   `).join("");
   openPrintWindow(`
-    <h2>Student Result Check PINs</h2>
+    <h2>Student Result Check PINs — ${esc(defaultTerm || "")} — ${esc(defaultSession || "")}</h2>
     <table>
       <tr><th>Name</th><th>Class</th><th>Admission No.</th><th>PIN</th></tr>
       ${rowsHTML}
     </table>
-    <p>${students.length} PIN${students.length === 1 ? "" : "s"} generated. Keep this list secure — it grants access to results.</p>
+    <p>${students.length} PIN${students.length === 1 ? "" : "s"} listed. These are valid for the current term only. Keep this list secure — it grants access to results.</p>
   `);
+
 }
 
 /* ================= FIX ADMISSION NUMBER SESSIONS =================
@@ -4648,7 +4795,7 @@ function openFixAdmissionSessions(level){
   main.innerHTML = `
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">Fix Admission No. Sessions</div>
-    <div class="placeholder-note">Finds any student whose Admission Number uses a placeholder session (0000/0000) — usually because Portal Settings didn't have a session saved yet when it was generated — and replaces it with a fresh number using the current session. PINs are kept unchanged.</div>
+    <div class="placeholder-note">Finds any student whose Admission Number is malformed — a placeholder (0000), a mistyped year, or the wrong structure entirely — and replaces it with a fresh, correctly-formatted number using the current session. This does NOT touch admission numbers from a genuinely earlier session (e.g. a returning student admitted in 2024/2025) — only actual errors are corrected. PINs are kept unchanged.</div>
     <button class="btn-primary" style="margin-top:12px;" onclick="runFixAdmissionSessions('${level}')">Find &amp; Fix Now</button>
     <div class="field-error" id="fixSessionError"></div>
     <div id="fixSessionResultsArea" style="margin-top:16px;"></div>
@@ -4675,7 +4822,23 @@ async function runFixAdmissionSessions(level){
     let students = [];
     snap.forEach(doc => students.push({ uid: doc.id, ...doc.data() }));
 
-    const affected = students.filter(s => s.admissionNo && s.admissionNo.includes("0000/0000"));
+    // Parses "FISS/YYYY/YYYY/NNNNN" and flags numbers that are actually
+    // malformed — wrong part count, a non-4-digit year, or the 0000
+    // placeholder — rather than simply "different from today's session".
+    // That distinction matters: a returning student legitimately admitted
+    // in an earlier session (e.g. 2024/2025) should NOT be reassigned
+    // just because Portal Settings has since moved on to 2025/2026 —
+    // only genuine typos/placeholders get corrected here.
+    const currentSession = defaultSession.trim();
+    const affected = students.filter(s => {
+      if(!s.admissionNo) return false;
+      const parts = s.admissionNo.split("/");
+      if(parts.length !== 4) return true; // malformed — wrong structure
+      const yearPattern = /^\d{4}$/;
+      if(!yearPattern.test(parts[1]) || !yearPattern.test(parts[2])) return true; // not a real 4-digit year
+      if(parts[1] === "0000" || parts[2] === "0000") return true; // placeholder
+      return false;
+    });
 
     const fixed = [];
     for(const s of affected){
@@ -4695,7 +4858,7 @@ async function runFixAdmissionSessions(level){
     }
 
     if(fixed.length === 0){
-      area.innerHTML = `<div class="placeholder-note">✅ Nothing to fix — no students found with a placeholder session in their Admission Number.</div>`;
+      area.innerHTML = `<div class="placeholder-note">✅ Nothing to fix — no malformed Admission Numbers found.</div>`;
       return;
     }
 
