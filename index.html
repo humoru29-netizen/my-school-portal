@@ -4,279 +4,33 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Faith International School, Itobe, Ofu Local Government Area, Kogi State. Excellence, character and a brighter future.">
+<meta name="theme-color" content="#6B0F1A">
 <title>Faith International School | Itobe, Kogi State</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon.png">
 <style>
-:root{
-  --green:#087443; --dark:#073d2a; --gold:#f2c94c; --cream:#f7faf8;
-  --text:#17231e; --muted:#66736d; --white:#fff;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
-body{font-family:Arial,Helvetica,sans-serif;color:var(--text);background:#fff;line-height:1.6}
-a{text-decoration:none;color:inherit}
-.container{width:min(1120px,92%);margin:auto}
-.topbar{background:var(--dark);color:#fff;font-size:14px;padding:8px 0}
-.topbar .container{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}
-header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-bottom:1px solid #e7ece9}
-.nav{height:76px;display:flex;align-items:center;justify-content:space-between;gap:25px}
-.brand{display:flex;align-items:center;gap:12px;font-weight:800}
-.logo{width:50px;height:50px;border-radius:14px;background:var(--green);color:#fff;display:grid;place-items:center;font-size:21px;box-shadow:0 7px 18px #08744333}
-.brand small{display:block;color:var(--green);font-size:11px;letter-spacing:2px}
-nav{display:flex;align-items:center;gap:24px;font-weight:600;font-size:15px}
-nav a:hover{color:var(--green)}
-.btn{display:inline-block;padding:12px 18px;border-radius:9px;background:var(--green);color:#fff;font-weight:700;border:0;cursor:pointer}
-.btn.gold{background:var(--gold);color:#173323}
-.btn.outline{background:transparent;border:1.5px solid var(--green);color:var(--green)}
-.menu{display:none;font-size:27px;background:none;border:0}
-.hero{background:linear-gradient(110deg,#edf8f2 0%,#fff 55%,#eaf5ef 100%);padding:75px 0 70px;overflow:hidden}
-.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:45px;align-items:center}
-.badge{display:inline-block;background:#dff3e8;color:var(--green);padding:7px 13px;border-radius:99px;font-weight:700;font-size:13px;margin-bottom:18px}
-h1{font-size:clamp(42px,6vw,72px);line-height:1.02;letter-spacing:-2px;margin-bottom:20px}
-h1 span{color:var(--green)}
-.hero p{font-size:18px;color:var(--muted);max-width:650px;margin-bottom:28px}
-.actions{display:flex;gap:12px;flex-wrap:wrap}
-.hero-card{min-height:380px;border-radius:28px;background:linear-gradient(145deg,#0a7748,#063d2b);position:relative;overflow:hidden;color:white;padding:34px;box-shadow:0 25px 60px #073d2a30}
-.hero-card:before,.hero-card:after{content:"";position:absolute;border-radius:50%;background:#ffffff12}
-.hero-card:before{width:300px;height:300px;right:-110px;top:-80px}
-.hero-card:after{width:220px;height:220px;left:-100px;bottom:-100px}
-.school-mark{height:155px;width:155px;border:5px solid #fff;border-radius:35px;display:grid;place-items:center;margin:15px auto 25px;font-size:55px;background:#ffffff12}
-.hero-card h3{text-align:center;font-size:25px;position:relative}
-.hero-card p{text-align:center;color:#dceee5;font-size:15px;position:relative;margin:8px auto}
-section{padding:80px 0}
-.section-head{text-align:center;max-width:700px;margin:0 auto 42px}
-.section-head .eyebrow{color:var(--green);font-weight:800;text-transform:uppercase;letter-spacing:2px;font-size:12px}
-.section-head h2{font-size:clamp(30px,4vw,45px);margin:7px 0 12px}
-.section-head p{color:var(--muted)}
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
-.card{padding:28px;border:1px solid #e4ebe7;border-radius:18px;background:#fff;box-shadow:0 10px 30px #1233220a}
-.icon{width:48px;height:48px;border-radius:13px;background:#e4f5eb;color:var(--green);display:grid;place-items:center;font-size:23px;margin-bottom:17px}
-.card h3{margin-bottom:8px}
-.card p{color:var(--muted);font-size:15px}
-.about{background:var(--cream)}
-.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:55px;align-items:center}
-.about-panel{background:linear-gradient(145deg,var(--green),var(--dark));color:#fff;border-radius:25px;padding:38px;min-height:340px;display:flex;flex-direction:column;justify-content:center}
-.about-panel h3{font-size:31px;margin-bottom:12px}
-.about-panel p{color:#d9eee4}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:25px}
-.stat{background:#ffffff16;border:1px solid #ffffff22;border-radius:13px;padding:15px;text-align:center}
-.stat strong{font-size:25px;display:block}
-.checks{display:grid;gap:16px;margin-top:25px}
-.check{display:flex;gap:12px;align-items:flex-start}
-.check b{color:var(--green)}
-.programs{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
-.program{padding:27px;border-radius:18px;background:#f4f8f6;border-left:5px solid var(--green)}
-.program h3{margin-bottom:6px}
-.program p{color:var(--muted)}
-.cta{padding:65px 0;background:var(--green);color:#fff;text-align:center}
-.cta h2{font-size:clamp(30px,4vw,46px);margin-bottom:12px}
-.cta p{color:#dceee5;max-width:680px;margin:0 auto 25px}
-footer{background:#062d21;color:#dce9e3;padding:55px 0 20px}
-.footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:40px}
-footer h3,footer h4{color:#fff;margin-bottom:12px}
-footer p,footer li{font-size:14px;color:#b8cdc4}
-footer ul{list-style:none;display:grid;gap:8px}
-.copy{border-top:1px solid #ffffff15;margin-top:35px;padding-top:18px;text-align:center;font-size:13px;color:#91aaa0}
-.testimonials{background:linear-gradient(180deg,#f4f8f6 0%,#fff 100%)}
-.t-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
-.t-card{background:#fff;border:1px solid #e4ebe7;border-radius:18px;padding:28px;box-shadow:0 10px 30px #1233220a;position:relative}
-.t-card .quote{font-size:34px;color:var(--gold);line-height:1;margin-bottom:10px;font-family:Georgia,serif}
-.t-card p{color:var(--text);font-size:15px;margin-bottom:18px}
-.t-person{display:flex;align-items:center;gap:12px}
-.t-avatar{width:42px;height:42px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px}
-.t-person strong{display:block;font-size:14px}
-.t-person span{color:var(--muted);font-size:13px}
-.modal{display:none;position:fixed;inset:0;background:#0008;z-index:50;padding:20px;align-items:center;justify-content:center}
-.modal.open{display:flex}
-.modal-box{background:#fff;border-radius:20px;padding:30px;max-width:480px;width:100%;position:relative}
-.close{position:absolute;right:18px;top:12px;border:0;background:none;font-size:28px;cursor:pointer}
-form{display:grid;gap:13px;margin-top:18px}
-input,textarea,select{width:100%;padding:13px;border:1px solid #d9e2dd;border-radius:9px;font:inherit}
-textarea{min-height:100px;resize:vertical}
-@media(max-width:800px){
-  nav{display:none;position:absolute;left:0;right:0;top:76px;background:#fff;padding:18px 5%;border-bottom:1px solid #ddd;flex-direction:column;align-items:flex-start}
-  nav.show{display:flex}.menu{display:block}.hero-grid,.about-grid{grid-template-columns:1fr}.cards{grid-template-columns:1fr}.programs{grid-template-columns:1fr}.t-grid{grid-template-columns:1fr}.footer-grid{grid-template-columns:1fr}.hero{padding-top:50px}.hero-card{min-height:300px}
-}
+:root{--maroon:#6B0F1A;--dark:#430912;--gold:#F2C94C;--cream:#fff9e6;--text:#191516;--muted:#6d6562;--line:#eadfda;--white:#fff}
+*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth}body{font-family:Segoe UI,Roboto,Arial,sans-serif;color:var(--text);line-height:1.6;background:#fff}a{text-decoration:none;color:inherit}.container{width:min(1120px,92%);margin:auto}
+.topbar{background:var(--dark);color:#fff;font-size:13px;padding:8px 0}.topbar .container{display:flex;justify-content:space-between;gap:15px;flex-wrap:wrap}
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}.nav{min-height:76px;display:flex;align-items:center;justify-content:space-between;gap:20px}.brand{display:flex;align-items:center;gap:11px;font-weight:800}.brand img{width:50px;height:50px;object-fit:contain}.brand small{display:block;color:var(--maroon);font-size:10px;letter-spacing:1.8px}nav{display:flex;align-items:center;gap:20px;font-weight:650;font-size:14px}nav a:hover{color:var(--maroon)}.btn{display:inline-block;padding:11px 17px;border-radius:10px;background:var(--maroon);color:#fff;font-weight:750;border:1px solid var(--maroon);cursor:pointer}.btn.gold{background:var(--gold);border-color:var(--gold);color:#261f08}.btn.outline{background:#fff;color:var(--maroon)}.menu{display:none;font-size:26px;border:0;background:none}
+.hero{background:radial-gradient(circle at 80% 20%,#fff5c8 0,#fff 32%),linear-gradient(120deg,#fffaf0,#fff);padding:76px 0}.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:45px;align-items:center}.badge{display:inline-block;background:#f8ebbd;color:var(--maroon);padding:7px 13px;border-radius:99px;font-weight:800;font-size:12px;margin-bottom:17px}h1{font-size:clamp(42px,6vw,70px);line-height:1.02;letter-spacing:-2px;margin-bottom:20px}h1 span{color:var(--maroon)}.hero p{font-size:18px;color:var(--muted);max-width:650px;margin-bottom:27px}.actions{display:flex;gap:11px;flex-wrap:wrap}.hero-card{min-height:390px;border-radius:28px;background:linear-gradient(145deg,#7d1320,#430912);color:#fff;padding:34px;box-shadow:0 25px 60px rgba(67,9,18,.25);display:flex;flex-direction:column;justify-content:center}.school-mark{width:160px;height:160px;margin:0 auto 20px;border-radius:30px;background:#fff;display:grid;place-items:center;overflow:hidden}.school-mark img{width:100%;height:100%;object-fit:contain}.hero-card h3{text-align:center;font-size:25px}.hero-card p{text-align:center;color:#f3e5e3;font-size:14px;margin:5px 0 20px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.stat{background:#ffffff12;border:1px solid #ffffff22;border-radius:12px;padding:13px;text-align:center}.stat strong{display:block;font-size:22px}.stat small{font-size:11px}
+section{padding:78px 0}.section-head{text-align:center;max-width:720px;margin:0 auto 40px}.eyebrow{color:var(--maroon);font-weight:850;text-transform:uppercase;letter-spacing:2px;font-size:11px}.section-head h2{font-size:clamp(30px,4vw,44px);margin:7px 0 12px}.section-head p{color:var(--muted)}.about{background:#fffaf0}.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:55px;align-items:center}.checks{display:grid;gap:16px;margin-top:25px}.check{display:flex;gap:12px;align-items:flex-start}.check b{color:var(--maroon)}.about-panel{background:linear-gradient(145deg,var(--maroon),var(--dark));color:#fff;border-radius:25px;padding:38px;min-height:330px;display:flex;flex-direction:column;justify-content:center}.about-panel h3{font-size:31px;margin-bottom:10px}.about-panel p{color:#f0dfe0}.programs,.cards,.t-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.program,.card,.t-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:26px;box-shadow:0 10px 30px rgba(40,20,10,.05)}.program{border-top:4px solid var(--maroon);background:#fffaf7}.program p,.card p,.t-card p{color:var(--muted);font-size:14px}.card .icon{font-size:25px;margin-bottom:12px}.testimonials{background:linear-gradient(180deg,#f9f4f1,#fff)}.quote{font-size:34px;color:var(--gold);font-family:Georgia,serif;line-height:1}.t-person{display:flex;gap:10px;align-items:center;margin-top:16px}.t-avatar{width:42px;height:42px;border-radius:50%;background:var(--maroon);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px}.t-person strong{font-size:13px;display:block}.t-person span{font-size:12px;color:var(--muted)}.cta{background:var(--maroon);color:#fff;text-align:center;padding:65px 0}.cta h2{font-size:clamp(30px,4vw,45px);margin-bottom:10px}.cta p{max-width:680px;margin:0 auto 23px;color:#f0dfe0}footer{background:#2b070c;color:#d9c7c8;padding:50px 0 20px}.footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:35px}footer h3,footer h4{color:#fff;margin-bottom:10px}footer p,footer li{font-size:13px}footer ul{list-style:none;display:grid;gap:7px}.copy{border-top:1px solid #ffffff18;margin-top:30px;padding-top:16px;text-align:center;font-size:12px;color:#a98f91}
+@media(max-width:800px){nav{display:none;position:absolute;left:0;right:0;top:76px;background:#fff;padding:17px 5%;border-bottom:1px solid var(--line);flex-direction:column;align-items:flex-start}.nav nav.show{display:flex}.menu{display:block}.hero{padding:52px 0}.hero-grid,.about-grid{grid-template-columns:1fr}.programs,.cards,.t-grid,.footer-grid{grid-template-columns:1fr}.hero-card{min-height:330px}.topbar .container{justify-content:center;text-align:center}}
 </style>
 </head>
 <body>
-
 <div class="topbar"><div class="container"><span>📍 Itobe, Ofu LGA, Kogi State</span><span>Building Character • Inspiring Excellence • Shaping Futures</span></div></div>
-
-<header>
-<div class="container nav">
-  <a class="brand" href="#home">
-    <div class="logo">FIS</div>
-    <div>Faith International School<small>ITOBE • KOGI STATE</small></div>
-  </a>
-  <button class="menu" onclick="toggleMenu()" aria-label="Open menu">☰</button>
-  <nav id="nav">
-    <a href="#home">Home</a><a href="#about">About</a><a href="#academics">Academics</a><a href="#admissions">Admissions</a><a href="#contact">Contact</a>
-    <a class="btn outline" href="portal.html">Portal Login</a>
-    <a class="btn" href="#" onclick="openModal('enquiry');return false">Enquire Now</a>
-  </nav>
-</div>
-</header>
-
+<header><div class="container nav"><a class="brand" href="#home"><img src="icons/icon-192.png" alt="Faith International School crest"><div>Faith International School<small>ITOBE • KOGI STATE</small></div></a><button class="menu" onclick="toggleMenu()" aria-label="Open menu">☰</button><nav id="nav"><a href="#home">Home</a><a href="#about">About</a><a href="#academics">Academics</a><a href="#admissions">Admissions</a><a href="#contact">Contact</a><a class="btn outline" href="portal.html">Portal Login</a><a class="btn" href="#contact">Enquire Now</a></nav></div></header>
 <main>
-<section class="hero" id="home">
-<div class="container hero-grid">
-  <div>
-    <span class="badge">WELCOME TO FAITH INTERNATIONAL SCHOOL</span>
-    <h1>Growing <span>Great Minds</span> for a Brighter Future.</h1>
-    <p>A modern school in Itobe, Ofu Local Government Area of Kogi State, committed to sound education, good character, discipline and the development of every child.</p>
-    <div class="actions">
-      <a class="btn" href="#" onclick="openModal('admission');return false">Start Admission</a>
-      <a class="btn outline" href="#about">Discover Our School</a>
-    </div>
-  </div>
-  <div class="hero-card">
-    <div class="school-mark">FIS</div>
-    <h3>Faith International School</h3>
-    <p>Itobe, Ofu LGA, Kogi State</p>
-    <div class="stats">
-      <div class="stat"><strong>📚</strong><small>Quality Learning</small></div>
-      <div class="stat"><strong>⭐</strong><small>Character</small></div>
-      <div class="stat"><strong>🎯</strong><small>Future Ready</small></div>
-    </div>
-  </div>
-</div>
-</section>
-
-<section id="about" class="about">
-<div class="container about-grid">
-  <div>
-    <div class="section-head" style="text-align:left;margin:0">
-      <span class="eyebrow">Who We Are</span>
-      <h2>A school where every child can thrive.</h2>
-      <p>Faith International School provides a supportive environment where learners are encouraged to think, create, communicate and develop the values needed for responsible citizenship.</p>
-    </div>
-    <div class="checks">
-      <div class="check"><b>✓</b><span><strong>Strong Academic Foundation</strong><br>Learning designed to build confidence and competence.</span></div>
-      <div class="check"><b>✓</b><span><strong>Character & Discipline</strong><br>We promote respect, responsibility and integrity.</span></div>
-      <div class="check"><b>✓</b><span><strong>Child-Centred Development</strong><br>We support academic, social and creative growth.</span></div>
-    </div>
-  </div>
-  <div class="about-panel">
-    <h3>Our Vision</h3>
-    <p>To raise confident, knowledgeable and responsible young people prepared to make a positive difference in their communities and beyond.</p>
-    <div class="stats"><div class="stat"><strong>01</strong><small>Purpose</small></div><div class="stat"><strong>02</strong><small>Excellence</small></div><div class="stat"><strong>03</strong><small>Impact</small></div></div>
-  </div>
-</div>
-</section>
-
-<section id="academics">
-<div class="container">
-<div class="section-head"><span class="eyebrow">Academics</span><h2>Learning with purpose.</h2><p>Our programmes are structured to give learners a balanced foundation for academic success and personal growth.</p></div>
-<div class="programs">
-  <div class="program"><h3>Early Years</h3><p>A nurturing beginning that develops communication, confidence, curiosity and foundational skills.</p></div>
-  <div class="program"><h3>Primary Education</h3><p>Strong literacy, numeracy, science, social and creative learning in a supportive environment.</p></div>
-  <div class="program"><h3>Secondary Education</h3><p>Focused academic preparation, critical thinking and practical skills for future study and careers.</p></div>
-  <div class="program"><h3>Digital Learning</h3><p>Technology-supported learning that helps students build useful digital skills for the modern world.</p></div>
-</div>
-</div>
-</section>
-
-<section style="background:#f8fbf9">
-<div class="container">
-<div class="section-head"><span class="eyebrow">Why Choose Us</span><h2>More than a classroom.</h2></div>
-<div class="cards">
-  <div class="card"><div class="icon">📖</div><h3>Quality Education</h3><p>Structured learning that encourages understanding, not just memorisation.</p></div>
-  <div class="card"><div class="icon">🧑‍🏫</div><h3>Dedicated Teachers</h3><p>Teachers who guide learners with care, patience and clear academic goals.</p></div>
-  <div class="card"><div class="icon">💻</div><h3>Digital Readiness</h3><p>Introducing learners to responsible and productive use of technology.</p></div>
-  <div class="card"><div class="icon">🏆</div><h3>Excellence</h3><p>We challenge every learner to discover strengths and pursue meaningful goals.</p></div>
-  <div class="card"><div class="icon">🤝</div><h3>Partnership</h3><p>Parents and school work together to support each child's progress.</p></div>
-  <div class="card"><div class="icon">🌱</div><h3>Character Building</h3><p>We nurture respect, responsibility, confidence and positive leadership.</p></div>
-</div>
-</div>
-</section>
-
-<section class="testimonials">
-<div class="container">
-<div class="section-head"><span class="eyebrow">What Families Say</span><h2>Trusted by parents in our community.</h2><p>Hear from the parents and guardians who have watched their children grow at Faith International School.</p></div>
-<div class="t-grid">
-  <div class="t-card">
-    <div class="quote">"</div>
-    <p>My daughter has grown so much in confidence since joining Faith International School. The teachers genuinely care about every child.</p>
-    <div class="t-person"><div class="t-avatar">I.A</div><div><strong>Ibrahim Ali Akee</strong><span>Parent, JSS 3</span></div></div>
-  </div>
-  <div class="t-card">
-    <div class="quote">"</div>
-    <p>The discipline and character training here is exactly what we wanted for our son. He comes home excited to learn.</p>
-    <div class="t-person"><div class="t-avatar">S.J</div><div><strong>Mrs Samuel Joy</strong><span>Parent, SS1</span></div></div>
-  </div>
-  <div class="t-card">
-    <div class="quote">"</div>
-    <p>From admission to daily updates, the school has been welcoming and professional. We're proud to be part of this community.</p>
-    <div class="t-person"><div class="t-avatar">O.S</div><div><strong>Mr Odibo Sunday</strong><span>Parent, SS1</span></div></div>
-  </div>
-</div>
-</div>
-</section>
-
-<section id="admissions">
-<div class="container about-grid">
-  <div class="about-panel">
-    <h3>Admissions Are Open</h3>
-    <p>Give your child an opportunity to learn, grow and prepare for the future at Faith International School.</p>
-    <div style="margin-top:22px"><a class="btn gold" href="#" onclick="openModal('admission');return false">Request Admission Information</a></div>
-  </div>
-  <div>
-    <div class="section-head" style="text-align:left;margin:0">
-      <span class="eyebrow">Admission Process</span><h2>Simple and straightforward.</h2>
-      <p>Contact the school to confirm available classes, admission requirements, school fees and resumption information.</p>
-    </div>
-    <div class="checks">
-      <div class="check"><b>1.</b><span>Submit an admission enquiry.</span></div>
-      <div class="check"><b>2.</b><span>Receive admission requirements and instructions.</span></div>
-      <div class="check"><b>3.</b><span>Complete the application and assessment process.</span></div>
-      <div class="check"><b>4.</b><span>Receive admission confirmation and complete registration.</span></div>
-    </div>
-  </div>
-</div>
-</section>
-
-<section class="cta">
-<div class="container"><h2>Let's build a brighter future together.</h2><p>Whether you are a parent seeking admission or simply want to learn more about Faith International School, we are ready to hear from you.</p><a class="btn gold" href="#" onclick="openModal('enquiry');return false">Contact the School</a></div>
-</section>
+<section class="hero" id="home"><div class="container hero-grid"><div><span class="badge">WELCOME TO FAITH INTERNATIONAL SCHOOL</span><h1>Growing <span>Great Minds</span> for a Brighter Future.</h1><p>A modern school in Itobe, Ofu Local Government Area of Kogi State, committed to sound education, good character, discipline and the development of every child.</p><div class="actions"><a class="btn" href="#admissions">Start Admission</a><a class="btn outline" href="#about">Discover Our School</a></div></div><div class="hero-card"><div class="school-mark"><img src="icons/icon-512.png" alt="School crest"></div><h3>Faith International School</h3><p>Itobe, Ofu LGA, Kogi State</p><div class="stats"><div class="stat"><strong>📚</strong><small>Quality Learning</small></div><div class="stat"><strong>⭐</strong><small>Character</small></div><div class="stat"><strong>🎯</strong><small>Future Ready</small></div></div></div></div></section>
+<section id="about" class="about"><div class="container about-grid"><div><div class="section-head" style="text-align:left;margin:0"><span class="eyebrow">Who We Are</span><h2>A school where every child can thrive.</h2><p>Faith International School provides a supportive environment where learners are encouraged to think, create, communicate and develop the values needed for responsible citizenship.</p></div><div class="checks"><div class="check"><b>✓</b><span><strong>Strong Academic Foundation</strong><br>Learning designed to build confidence and competence.</span></div><div class="check"><b>✓</b><span><strong>Character & Discipline</strong><br>We promote respect, responsibility and integrity.</span></div><div class="check"><b>✓</b><span><strong>Child-Centred Development</strong><br>We support academic, social and creative growth.</span></div></div></div><div class="about-panel"><h3>Our Vision</h3><p>To raise confident, knowledgeable and responsible young people prepared to make a positive difference in their communities and beyond.</p><div class="stats" style="margin-top:25px"><div class="stat"><strong>01</strong><small>Purpose</small></div><div class="stat"><strong>02</strong><small>Excellence</small></div><div class="stat"><strong>03</strong><small>Impact</small></div></div></div></div></section>
+<section id="academics"><div class="container"><div class="section-head"><span class="eyebrow">Academics</span><h2>Learning with purpose.</h2><p>Programmes structured to give learners a balanced foundation for academic success and personal growth.</p></div><div class="programs"><div class="program"><h3>Early Years</h3><p>A nurturing beginning that develops communication, confidence, curiosity and foundational skills.</p></div><div class="program"><h3>Primary Education</h3><p>Strong literacy, numeracy, science, social and creative learning in a supportive environment.</p></div><div class="program"><h3>Secondary Education</h3><p>Focused academic preparation, critical thinking and practical skills for future study and careers.</p></div><div class="program"><h3>Digital Learning</h3><p>Technology-supported learning that helps students build useful digital skills for the modern world.</p></div></div></div></section>
+<section style="background:#fdf8f5"><div class="container"><div class="section-head"><span class="eyebrow">Why Choose Us</span><h2>More than a classroom.</h2></div><div class="cards"><div class="card"><div class="icon">📖</div><h3>Quality Education</h3><p>Structured learning that encourages understanding, not just memorisation.</p></div><div class="card"><div class="icon">🧑‍🏫</div><h3>Dedicated Teachers</h3><p>Teachers who guide learners with care, patience and clear academic goals.</p></div><div class="card"><div class="icon">💻</div><h3>Digital Readiness</h3><p>Introducing learners to responsible and productive use of technology.</p></div><div class="card"><div class="icon">🏆</div><h3>Excellence</h3><p>We challenge every learner to discover strengths and pursue meaningful goals.</p></div><div class="card"><div class="icon">🤝</div><h3>Partnership</h3><p>Parents and school work together to support each child's progress.</p></div><div class="card"><div class="icon">🌱</div><h3>Character Building</h3><p>We nurture respect, responsibility, confidence and positive leadership.</p></div></div></div></section>
+<section class="testimonials"><div class="container"><div class="section-head"><span class="eyebrow">What Families Say</span><h2>Trusted by parents in our community.</h2></div><div class="t-grid"><div class="t-card"><div class="quote">"</div><p>My daughter has grown so much in confidence since joining Faith International School. The teachers genuinely care about every child.</p><div class="t-person"><div class="t-avatar">IA</div><div><strong>Ibrahim Ali Akee</strong><span>Parent, JSS 3</span></div></div></div><div class="t-card"><div class="quote">"</div><p>The discipline and character training here is exactly what we wanted for our son. He comes home excited to learn.</p><div class="t-person"><div class="t-avatar">SJ</div><div><strong>Mrs Samuel Joy</strong><span>Parent, SS1</span></div></div></div><div class="t-card"><div class="quote">"</div><p>From admission to daily updates, the school has been welcoming and professional. We're proud to be part of this community.</p><div class="t-person"><div class="t-avatar">OS</div><div><strong>Mr Odibo Sunday</strong><span>Parent, SS1</span></div></div></div></div></div></section>
+<section id="admissions"><div class="container about-grid"><div class="about-panel"><h3>Admissions Are Open</h3><p>Give your child an opportunity to learn, grow and prepare for the future at Faith International School.</p><div style="margin-top:22px"><a class="btn gold" href="tel:09152277041">Call the School</a></div></div><div><div class="section-head" style="text-align:left;margin:0"><span class="eyebrow">Admission Process</span><h2>Simple and straightforward.</h2><p>Contact the school to confirm available classes, admission requirements, school fees and resumption information.</p></div><div class="checks"><div class="check"><b>1.</b><span>Submit an admission enquiry.</span></div><div class="check"><b>2.</b><span>Receive admission requirements and instructions.</span></div><div class="check"><b>3.</b><span>Complete the application and assessment process.</span></div><div class="check"><b>4.</b><span>Receive admission confirmation and complete registration.</span></div></div></div></div></section>
+<section class="cta"><div class="container"><h2>Let's build a brighter future together.</h2><p>Whether you are a parent seeking admission or simply want to learn more about Faith International School, we are ready to hear from you.</p><a class="btn gold" href="#contact">Contact the School</a></div></section>
 </main>
-
-<footer id="contact">
-<div class="container">
-<div class="footer-grid">
-  <div><h3>Faith International School</h3><p>Itobe, Ofu Local Government Area, Kogi State, Nigeria.</p><p style="margin-top:12px">Building character. Inspiring excellence. Shaping futures.</p></div>
-  <div><h4>Quick Links</h4><ul><li><a href="#about">About Us</a></li><li><a href="#academics">Academics</a></li><li><a href="#admissions">Admissions</a></li></ul></div>
-  <div><h4>Contact</h4><ul><li>📍 Itobe, Ofu LGA, Kogi State</li><li>📞 <a href="tel:09152277041">0915 227 7041</a></li><li>📞 <a href="tel:09027164321">0902 716 4321</a></li><li>📞 <a href="tel:08164504897">0816 450 4897</a></li><li>📞 <a href="tel:09070942342">0907 094 2342</a></li><li>📞 <a href="tel:09133399341">0913 339 9341</a></li><li>✉️ Email: <a href="mailto:faithinternationalsecondarysch@gmail.com">faithinternationalsecondarysch@gmail.com</a></li></ul></div>
-</div>
-<div class="copy">© <span id="year"></span> Faith International School. All rights reserved.</div>
-</div>
-</footer>
-
-<div class="modal" id="modal">
-<div class="modal-box">
-<button class="close" onclick="closeModal()">×</button>
-<h2 id="modalTitle">Contact Faith International School</h2>
-<p style="color:#66736d;margin-top:5px">Fill this form and the school can follow up with you.</p>
-<form onsubmit="submitForm(event)">
-<input required placeholder="Parent/Guardian name">
-<input required type="tel" placeholder="Phone number">
-<input type="email" placeholder="Email address">
-<select><option>Admission enquiry</option><option>General enquiry</option><option>School information</option></select>
-<textarea placeholder="Message"></textarea>
-<button class="btn" type="submit">Submit Enquiry</button>
-</form>
-</div>
-</div>
-
-<script>
-function toggleMenu(){document.getElementById('nav').classList.toggle('show')}
-function openModal(type){
- document.getElementById('modal').classList.add('open');
- document.getElementById('modalTitle').textContent = type==='admission' ? 'Request Admission Information' : 'Contact Faith International School';
-}
-function closeModal(){document.getElementById('modal').classList.remove('open')}
-function submitForm(e){e.preventDefault();alert('Thank you. Your enquiry form is ready to be connected to the school email, WhatsApp or backend.');closeModal()}
-document.getElementById('year').textContent=new Date().getFullYear();
-document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>document.getElementById('nav').classList.remove('show')));
-</script>
-</body>
-</html>
+<footer id="contact"><div class="container"><div class="footer-grid"><div><h3>Faith International School</h3><p>Itobe, Ofu Local Government Area, Kogi State, Nigeria.</p><p style="margin-top:10px">Building character. Inspiring excellence. Shaping futures.</p></div><div><h4>Quick Links</h4><ul><li><a href="#about">About Us</a></li><li><a href="#academics">Academics</a></li><li><a href="#admissions">Admissions</a></li><li><a href="portal.html">School Portal</a></li></ul></div><div><h4>Contact</h4><ul><li>📍 Itobe, Ofu LGA, Kogi State</li><li>📞 <a href="tel:09152277041">0915 227 7041</a></li><li>📞 <a href="tel:09027164321">0902 716 4321</a></li><li>📞 <a href="tel:08164504897">0816 450 4897</a></li><li>📞 <a href="tel:09070942342">0907 094 2342</a></li><li>✉️ <a href="mailto:faithinternationalsecondarysch@gmail.com">faithinternationalsecondarysch@gmail.com</a></li></ul></div></div><div class="copy">© <span id="year"></span> Faith International School. All rights reserved.</div></div></footer>
+<script>function toggleMenu(){document.getElementById('nav').classList.toggle('show')}document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>document.getElementById('nav').classList.remove('show')));document.getElementById('year').textContent=new Date().getFullYear();if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('service-worker.js').catch(e=>console.log('Service worker registration failed',e)))}</script>
+</body></html>
