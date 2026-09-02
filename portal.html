@@ -620,6 +620,9 @@
       <button class="modal-close" onclick="closeCredentialsPanel()">&times;</button>
     </div>
     <div class="modal-body" id="credentialsBody"></div>
+    <div class="modal-body" style="padding-top:0;">
+      <button class="btn-primary" id="credentialsPrintBtn" onclick="printCurrentCredentials()">🖨️ Print</button>
+    </div>
   </div>
 </div>
 
@@ -809,6 +812,7 @@ const SCHOOL_CREST_B64 = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDh
 
 let currentUser = null;   // Firebase auth user
 let defaultTerm = "";     // Populated by loadPortalSettings(); safe default until then
+let currentCredentialsData = null; // Holds whatever is currently shown in the credentials/PIN reveal panel, for printCurrentCredentials()
 let defaultSession = "";  // Populated by loadPortalSettings(); safe default until then
 let defaultTermEndsDate = "";       // Populated by loadPortalSettings(); prints on Report Cards
 let defaultNextTermBeginsDate = ""; // Populated by loadPortalSettings(); prints on Report Cards
@@ -1760,8 +1764,7 @@ async function assignAdmissionNumber(uid, name){
   try{
     const admissionNo = await generateNextAdmissionNo();
     await db.collection("users").doc(uid).update({ admissionNo });
-    alert(`Done. Admission Number: ${admissionNo}\n\nThis is permanent and won't change. To give this student a Result PIN, use "Generate PIN" next.`);
-    openManageAccounts(manageAccountsContext);
+    showCredentials({ name, admissionNo });
   } catch(e){
     alert("Error assigning admission number: " + e.message);
   }
@@ -1795,8 +1798,7 @@ async function generateStudentPin(uid, name){
       admissionNo: u.admissionNo, term: defaultTerm, session: defaultSession
     });
 
-    alert(`Done. Result PIN: ${pin}\nValid for: ${defaultTerm || "current term"} — ${defaultSession || "current session"}\n\nWrite this down now — share it with the student's parent/guardian for "Check My Result". This PIN will stop working once the term changes.`);
-    openManageAccounts(manageAccountsContext);
+    showCredentials({ name: u.name, admissionNo: u.admissionNo, resultPin: pin, term: defaultTerm, session: defaultSession });
   } catch(e){
     alert("Error generating PIN: " + e.message);
   }
@@ -3261,25 +3263,47 @@ async function submitCreateAccount(context){
 }
 
 function showCredentials(data){
+  currentCredentialsData = data;
   const panel = document.getElementById("credentialsPanel");
   const body = document.getElementById("credentialsBody");
   body.innerHTML = `
     <div class="cred-row"><span class="k">Name</span><span class="v">${data.name}</span></div>
-    <div class="cred-row"><span class="k">${data.role === "student" ? "Username" : "Email"}</span><span class="v">${data.email}</span></div>
-    <div class="cred-row"><span class="k">Password</span><span class="v">${data.password}</span></div>
-    <div class="cred-row"><span class="k">Role</span><span class="v">${roleLabel(data.role)}</span></div>
+    ${data.email ? `<div class="cred-row"><span class="k">${data.role === "student" ? "Username" : "Email"}</span><span class="v">${data.email}</span></div>` : ""}
+    ${data.password ? `<div class="cred-row"><span class="k">Password</span><span class="v">${data.password}</span></div>` : ""}
+    ${data.role ? `<div class="cred-row"><span class="k">Role</span><span class="v">${roleLabel(data.role)}</span></div>` : ""}
     ${data.classAssigned ? `<div class="cred-row"><span class="k">Class</span><span class="v">${Array.isArray(data.classAssigned) ? data.classAssigned.join(", ") : data.classAssigned}</span></div>` : ""}
     ${data.subjectsAssigned ? `<div class="cred-row"><span class="k">Subjects</span><span class="v">${data.subjectsAssigned.join(", ")}</span></div>` : ""}
     ${data.admissionNo ? `<div class="cred-row"><span class="k">Admission No.</span><span class="v">${data.admissionNo}</span></div>` : ""}
     ${data.dob ? `<div class="cred-row"><span class="k">Date of Birth</span><span class="v">${data.dob}</span></div>` : ""}
     ${data.resultPin ? `<div class="cred-row"><span class="k">Result Check PIN</span><span class="v">${data.resultPin}</span></div>` : ""}
-    <div class="cred-warning">Save or share these credentials now — the password cannot be retrieved again later. This account will log straight into its assigned dashboard.${data.resultPin ? " Share the Admission Number and PIN with the student's parent/guardian for the public \"Check My Result\" feature." : ""}</div>
+    ${data.term ? `<div class="cred-row"><span class="k">Valid For</span><span class="v">${data.term} — ${data.session}</span></div>` : ""}
+    <div class="cred-warning">${data.password ? "Save or share these credentials now — the password cannot be retrieved again later. This account will log straight into its assigned dashboard." : ""}${data.resultPin ? " Share the Admission Number and PIN with the student's parent/guardian for the public \"Check My Result\" feature." : ""}</div>
   `;
   panel.classList.remove("hidden");
 }
 
+function printCurrentCredentials(){
+  const d = currentCredentialsData;
+  if(!d) return;
+  openPrintWindow(`
+    <h2>${d.resultPin && !d.password ? "Result Check PIN" : "Account Details"}</h2>
+    <table>
+      <tr><td><strong>Name</strong></td><td>${esc(d.name || "")}</td></tr>
+      ${d.email ? `<tr><td><strong>${d.role === "student" ? "Username" : "Email"}</strong></td><td>${esc(d.email)}</td></tr>` : ""}
+      ${d.password ? `<tr><td><strong>Password</strong></td><td>${esc(d.password)}</td></tr>` : ""}
+      ${d.classAssigned ? `<tr><td><strong>Class</strong></td><td>${esc(Array.isArray(d.classAssigned) ? d.classAssigned.join(", ") : d.classAssigned)}</td></tr>` : ""}
+      ${d.admissionNo ? `<tr><td><strong>Admission No.</strong></td><td>${esc(d.admissionNo)}</td></tr>` : ""}
+      ${d.dob ? `<tr><td><strong>Date of Birth</strong></td><td>${esc(d.dob)}</td></tr>` : ""}
+      ${d.resultPin ? `<tr><td><strong>Result Check PIN</strong></td><td>${esc(d.resultPin)}</td></tr>` : ""}
+      ${d.term ? `<tr><td><strong>Valid For</strong></td><td>${esc(d.term)} — ${esc(d.session)}</td></tr>` : ""}
+    </table>
+    <p>Keep this slip secure.</p>
+  `);
+}
+
 function closeCredentialsPanel(){
   document.getElementById("credentialsPanel").classList.add("hidden");
+  currentCredentialsData = null;
   renderDashboard(); // refresh underlying dashboard
 }
 
