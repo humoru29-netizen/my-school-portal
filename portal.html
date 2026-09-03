@@ -1509,6 +1509,477 @@ function printBlankAdmissionForm(){
   `);
 }
 
+/* ============================================================
+   CBT — COMPUTER-BASED TESTING
+   Multiple-choice only, auto-graded. Admins create/manage tests
+   for safety of portal storage; teachers only add questions to a
+   shared Question Bank and view scores afterward. Students take a
+   timed test with one attempt only.
+
+   Collections:
+   - questionBank: {subject, level, class, questionText, options[4],
+       correctIndex, createdBy, createdByName, createdAt}
+   - cbtTests: {title, level, class, subject, term, session,
+       durationMinutes, questions[] (snapshot from bank at creation
+       time), status: "draft"|"published", createdBy, createdAt}
+   - cbtAttempts, doc id = `${testId}_${studentUid}` (deterministic,
+       so a second attempt can be blocked by checking existence
+       first rather than allowing duplicate attempt records):
+       {testId, studentUid, studentName, class, subject, answers[],
+        score, totalQuestions, submittedAt}
+============================================================ */
+
+/* ---------- TEACHER: QUESTION BANK ---------- */
+function openQuestionBank(){
+  const main = document.getElementById("mainContent");
+  const myClasses = Array.isArray(currentProfile.class) ? currentProfile.class : (currentProfile.class ? [currentProfile.class] : []);
+  const mySubjects = currentProfile.subjects || [];
+
+  if(myClasses.length === 0 || mySubjects.length === 0){
+    main.innerHTML = `
+      <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
+      <div class="section-title" style="margin-top:12px;">Question Bank</div>
+      <div class="placeholder-note">No classes or subjects are assigned to your account yet. Contact your Admin.</div>
+    `;
+    return;
+  }
+
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
+    <div class="section-title" style="margin-top:12px;">Question Bank — Add a Question</div>
+    <div class="form-group"><label>Class</label><select id="qbClass">${myClasses.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select></div>
+    <div class="form-group"><label>Subject</label><select id="qbSubject">${mySubjects.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}</select></div>
+    <div class="form-group"><label>Question</label><textarea id="qbQuestionText" placeholder="Type the question here"></textarea></div>
+    <div class="form-group"><label>Option A</label><input type="text" id="qbOptA"></div>
+    <div class="form-group"><label>Option B</label><input type="text" id="qbOptB"></div>
+    <div class="form-group"><label>Option C</label><input type="text" id="qbOptC"></div>
+    <div class="form-group"><label>Option D</label><input type="text" id="qbOptD"></div>
+    <div class="form-group"><label>Correct Answer</label>
+      <select id="qbCorrect"><option value="0">Option A</option><option value="1">Option B</option><option value="2">Option C</option><option value="3">Option D</option></select>
+    </div>
+    <div class="field-error" id="qbError"></div>
+    <button class="btn-primary" id="qbSubmitBtn" onclick="submitQuestionToBank()">Add Question</button>
+    <div class="section-title" style="margin-top:24px;">My Questions</div>
+    <div id="qbListArea"><div class="placeholder-note">Loading...</div></div>
+  `;
+  loadMyQuestions();
+}
+async function submitQuestionToBank(){
+  const cls = document.getElementById("qbClass").value;
+  const subject = document.getElementById("qbSubject").value;
+  const questionText = document.getElementById("qbQuestionText").value.trim();
+  const optA = document.getElementById("qbOptA").value.trim();
+  const optB = document.getElementById("qbOptB").value.trim();
+  const optC = document.getElementById("qbOptC").value.trim();
+  const optD = document.getElementById("qbOptD").value.trim();
+  const correctIndex = Number(document.getElementById("qbCorrect").value);
+  const errBox = document.getElementById("qbError");
+  const btn = document.getElementById("qbSubmitBtn");
+  errBox.textContent = "";
+
+  if(!questionText || !optA || !optB || !optC || !optD){
+    errBox.textContent = "Please fill in the question and all four options.";
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = "Adding...";
+  try{
+    await db.collection("questionBank").add({
+      subject, level: currentProfile.level, class: cls,
+      questionText, options: [optA, optB, optC, optD], correctIndex,
+      createdBy: currentUser.uid, createdByName: currentProfile.name || currentUser.email,
+      createdAt: new Date().toISOString()
+    });
+    document.getElementById("qbQuestionText").value = "";
+    document.getElementById("qbOptA").value = "";
+    document.getElementById("qbOptB").value = "";
+    document.getElementById("qbOptC").value = "";
+    document.getElementById("qbOptD").value = "";
+    document.getElementById("qbCorrect").value = "0";
+    loadMyQuestions();
+  } catch(e){
+    errBox.textContent = "Error adding question: " + e.message;
+  } finally{
+    btn.disabled = false; btn.textContent = "Add Question";
+  }
+}
+async function loadMyQuestions(){
+  const area = document.getElementById("qbListArea");
+  try{
+    const snap = await db.collection("questionBank").where("createdBy","==",currentUser.uid).get();
+    let questions = [];
+    snap.forEach(doc => questions.push({id:doc.id, ...doc.data()}));
+    questions.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+    if(!questions.length){
+      area.innerHTML = `<div class="placeholder-note">You haven't added any questions yet.</div>`;
+      return;
+    }
+    area.innerHTML = questions.map(q => `
+      <div class="card" style="padding:12px;margin-bottom:8px;">
+        <div style="font-size:12px;color:#666;">${esc(q.subject)} · ${esc(q.class)}</div>
+        <div style="font-weight:600;margin-top:4px;">${esc(q.questionText)}</div>
+        <div style="font-size:13px;margin-top:6px;color:#0a7748;">Correct: ${esc(q.options[q.correctIndex] || "")}</div>
+        <button class="btn-secondary" style="width:auto;color:#a31527;margin-top:8px;" onclick="deleteQuestionFromBank('${q.id}')">Delete</button>
+      </div>
+    `).join("");
+  } catch(e){
+    area.innerHTML = `<div class="field-error">Error loading questions: ${e.message}</div>`;
+  }
+}
+async function deleteQuestionFromBank(id){
+  if(!confirm("Delete this question from the bank?")) return;
+  try{
+    await db.collection("questionBank").doc(id).delete();
+    loadMyQuestions();
+  } catch(e){ alert("Unable to delete question: " + e.message); }
+}
+
+/* ---------- ADMIN: CBT TESTS (CREATE / MANAGE) ---------- */
+let cbtTestsContext = "general";
+let cbtTestsList = [];
+function canManageCBTTests(){
+  return ["general_admin","primary_admin","secondary_admin"].includes(currentProfile && currentProfile.role);
+}
+async function openCBTTests(context){
+  if(!canManageCBTTests()){ alert("You are not authorised to manage CBT tests."); return; }
+  cbtTestsContext = context || "general";
+  const main = document.getElementById("mainContent");
+  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">CBT Tests</div><div class="placeholder-note">Loading tests...</div>`;
+  try{
+    const snap = await db.collection("cbtTests").get();
+    cbtTestsList = [];
+    snap.forEach(doc => cbtTestsList.push({id:doc.id, ...doc.data()}));
+    if(cbtTestsContext !== "general") cbtTestsList = cbtTestsList.filter(t => t.level === cbtTestsContext);
+    cbtTestsList.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+    renderCBTTestsList();
+  } catch(e){
+    main.innerHTML = `<div class="section-title">CBT Tests</div><div class="field-error">Error loading tests: ${e.message}</div>`;
+  }
+}
+function renderCBTTestsList(){
+  const main = document.getElementById("mainContent");
+  const cards = cbtTestsList.length ? cbtTestsList.map(t => `
+    <div class="card" style="padding:14px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+        <div style="font-weight:800;font-size:15px;">${esc(t.title)}</div>
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${t.status==='published'?'#0a7748':'#a3791b'};">${esc(t.status)}</span>
+      </div>
+      <div style="font-size:12px;color:#666;margin-top:4px;">${esc(t.level)} · ${esc(t.class)} · ${esc(t.subject)} · ${esc(t.term)} ${esc(t.session)}</div>
+      <div style="font-size:12px;color:#666;margin-top:2px;">${(t.questions||[]).length} questions · ${esc(t.durationMinutes)} minutes</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        ${t.status==='draft' ? `<button class="btn-primary" style="width:auto;" onclick="publishCBTTest('${t.id}')">Publish</button>` : `<button class="btn-secondary" style="width:auto;" onclick="unpublishCBTTest('${t.id}')">Unpublish</button>`}
+        <button class="btn-secondary" style="width:auto;" onclick="viewCBTTestScores('${t.id}')">View Scores</button>
+        <button class="btn-secondary" style="width:auto;color:#a31527;" onclick="deleteCBTTest('${t.id}')">Delete</button>
+      </div>
+    </div>
+  `).join("") : `<div class="placeholder-note">No CBT tests yet.</div>`;
+  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">CBT Tests</div><button class="btn-primary" style="width:auto;margin-bottom:16px;" onclick="openCreateCBTTest()">+ Create New Test</button>${cards}`;
+}
+function openCreateCBTTest(){
+  const main = document.getElementById("mainContent");
+  const levelOptions = cbtTestsContext === "general"
+    ? `<option value="primary">Primary</option><option value="secondary">Secondary</option>`
+    : `<option value="${cbtTestsContext}">${cbtTestsContext[0].toUpperCase()+cbtTestsContext.slice(1)}</option>`;
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderCBTTestsList()">&larr; Back to CBT Tests</button>
+    <div class="section-title" style="margin-top:12px;">Create New CBT Test</div>
+    <div class="form-group"><label>Title</label><input type="text" id="cbtTitle" placeholder="e.g. Mathematics First Term Test"></div>
+    <div class="form-group"><label>Level</label><select id="cbtLevel" onchange="updateCBTClassOptions()">${levelOptions}</select></div>
+    <div class="form-group"><label>Class</label><select id="cbtClass"></select></div>
+    <div class="form-group"><label>Subject</label><select id="cbtSubject"></select></div>
+    <div class="form-group"><label>Term</label><select id="cbtTerm">${TERMS.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}</select></div>
+    <div class="form-group"><label>Session</label><input type="text" id="cbtSession" placeholder="e.g. 2025/2026" value="${esc(defaultSession||"")}"></div>
+    <div class="form-group"><label>Duration (minutes)</label><input type="number" id="cbtDuration" value="30" min="1"></div>
+    <div class="form-group"><label>Number of Questions</label><input type="number" id="cbtNumQuestions" value="20" min="1"></div>
+    <div class="signup-note">Questions are pulled randomly from the Question Bank matching the class and subject above. If fewer questions exist in the bank than requested, all available questions will be used.</div>
+    <div class="field-error" id="cbtCreateError"></div>
+    <button class="btn-primary" id="cbtCreateBtn" onclick="submitCreateCBTTest()">Create Test (as Draft)</button>
+    <button class="btn-secondary" onclick="renderCBTTestsList()">Cancel</button>
+  `;
+  updateCBTClassOptions();
+}
+function updateCBTClassOptions(){
+  const level = document.getElementById("cbtLevel").value;
+  const classes = level === "primary" ? PRIMARY_CLASSES : SECONDARY_CLASSES;
+  const subjects = level === "primary" ? PRIMARY_SUBJECTS : SECONDARY_SUBJECTS;
+  document.getElementById("cbtClass").innerHTML = classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
+  document.getElementById("cbtSubject").innerHTML = subjects.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+}
+async function submitCreateCBTTest(){
+  const title = document.getElementById("cbtTitle").value.trim();
+  const level = document.getElementById("cbtLevel").value;
+  const cls = document.getElementById("cbtClass").value;
+  const subject = document.getElementById("cbtSubject").value;
+  const term = document.getElementById("cbtTerm").value;
+  const session = document.getElementById("cbtSession").value.trim();
+  const durationMinutes = Number(document.getElementById("cbtDuration").value);
+  const numQuestions = Number(document.getElementById("cbtNumQuestions").value);
+  const errBox = document.getElementById("cbtCreateError");
+  const btn = document.getElementById("cbtCreateBtn");
+  errBox.textContent = "";
+
+  if(!title || !session || !durationMinutes || !numQuestions){
+    errBox.textContent = "Please fill in all fields.";
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = "Creating...";
+  try{
+    const snap = await db.collection("questionBank")
+      .where("level","==",level).where("class","==",cls).where("subject","==",subject)
+      .get();
+    let pool = [];
+    snap.forEach(doc => pool.push(doc.data()));
+
+    if(pool.length === 0){
+      errBox.textContent = "No questions found in the Question Bank for this class and subject yet. Ask a teacher to add some first.";
+      return;
+    }
+
+    // Shuffle and take the requested number (or all, if fewer exist).
+    for(let i = pool.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const selected = pool.slice(0, Math.min(numQuestions, pool.length))
+      .map(q => ({ questionText: q.questionText, options: q.options, correctIndex: q.correctIndex }));
+
+    await db.collection("cbtTests").add({
+      title, level, class: cls, subject, term, session,
+      durationMinutes, questions: selected,
+      status: "draft",
+      createdBy: currentUser.uid, createdAt: new Date().toISOString()
+    });
+
+    if(selected.length < numQuestions){
+      alert(`Test created with ${selected.length} question(s) — that's all that were available in the Question Bank for this class and subject.`);
+    }
+    openCBTTests(cbtTestsContext);
+  } catch(e){
+    errBox.textContent = "Error creating test: " + e.message;
+  } finally{
+    btn.disabled = false; btn.textContent = "Create Test (as Draft)";
+  }
+}
+async function publishCBTTest(id){
+  try{
+    await db.collection("cbtTests").doc(id).update({status:"published", publishedAt:new Date().toISOString()});
+    openCBTTests(cbtTestsContext);
+  } catch(e){ alert("Unable to publish test: " + e.message); }
+}
+async function unpublishCBTTest(id){
+  try{
+    await db.collection("cbtTests").doc(id).update({status:"draft"});
+    openCBTTests(cbtTestsContext);
+  } catch(e){ alert("Unable to unpublish test: " + e.message); }
+}
+async function deleteCBTTest(id){
+  if(!confirm("Delete this test? Student scores already recorded for it will remain, but the test itself will no longer be visible or takeable.")) return;
+  try{
+    await db.collection("cbtTests").doc(id).delete();
+    cbtTestsList = cbtTestsList.filter(t => t.id !== id);
+    renderCBTTestsList();
+  } catch(e){ alert("Unable to delete test: " + e.message); }
+}
+
+/* ---------- SCORES (used by both Admin "View Scores" and Teacher "CBT Scores") ---------- */
+async function openCBTScores(){
+  const main = document.getElementById("mainContent");
+  const mySubjects = currentProfile.subjects || [];
+  const myClasses = Array.isArray(currentProfile.class) ? currentProfile.class : (currentProfile.class ? [currentProfile.class] : []);
+
+  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">CBT Scores</div><div class="placeholder-note">Loading tests...</div>`;
+  try{
+    const snap = await db.collection("cbtTests").where("status","==","published").get();
+    let tests = [];
+    snap.forEach(doc => tests.push({id:doc.id, ...doc.data()}));
+    tests = tests.filter(t => mySubjects.includes(t.subject) && myClasses.includes(t.class));
+    tests.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+
+    if(!tests.length){
+      main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">CBT Scores</div><div class="placeholder-note">No published CBT tests found for your assigned classes and subjects.</div>`;
+      return;
+    }
+
+    const cards = tests.map(t => `
+      <div class="card" style="padding:14px;margin-bottom:12px;">
+        <div style="font-weight:800;font-size:15px;">${esc(t.title)}</div>
+        <div style="font-size:12px;color:#666;margin-top:4px;">${esc(t.class)} · ${esc(t.subject)} · ${esc(t.term)} ${esc(t.session)}</div>
+        <button class="btn-primary" style="width:auto;margin-top:10px;" onclick="viewCBTTestScores('${t.id}')">View Scores</button>
+      </div>
+    `).join("");
+    main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">CBT Scores</div>${cards}`;
+  } catch(e){
+    main.innerHTML = `<div class="section-title">CBT Scores</div><div class="field-error">Error loading tests: ${e.message}</div>`;
+  }
+}
+async function viewCBTTestScores(testId){
+  const main = document.getElementById("mainContent");
+  const backFn = currentProfile.role === "teacher" ? "openCBTScores()" : `openCBTTests('${cbtTestsContext}')`;
+  main.innerHTML = `<button class="btn-secondary" onclick="${backFn}">&larr; Back</button><div class="section-title" style="margin-top:12px;">Scores</div><div class="placeholder-note">Loading scores...</div>`;
+  try{
+    const testDoc = await db.collection("cbtTests").doc(testId).get();
+    const test = testDoc.exists ? testDoc.data() : null;
+    const snap = await db.collection("cbtAttempts").where("testId","==",testId).get();
+    let attempts = [];
+    snap.forEach(doc => attempts.push(doc.data()));
+    attempts.sort((a,b) => (b.score||0) - (a.score||0));
+
+    const rows = attempts.length ? attempts.map(a => `
+      <div style="display:flex; justify-content:space-between; border:1px solid var(--gray-line); border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div>${esc(a.studentName)}</div>
+        <div><strong>${esc(a.score)} / ${esc(a.totalQuestions)}</strong></div>
+      </div>
+    `).join("") : `<div class="placeholder-note">No students have taken this test yet.</div>`;
+
+    main.innerHTML = `
+      <button class="btn-secondary" onclick="${backFn}">&larr; Back</button>
+      <div class="section-title" style="margin-top:12px;">${esc(test ? test.title : "Scores")}</div>
+      <div class="placeholder-note">${test ? esc(test.class) + " · " + esc(test.subject) + " · " + esc(test.term) + " " + esc(test.session) : ""} — ${attempts.length} student(s) have taken this test.</div>
+      ${rows}
+    `;
+  } catch(e){
+    main.innerHTML = `<div class="section-title">Scores</div><div class="field-error">Error loading scores: ${e.message}</div>`;
+  }
+}
+
+/* ---------- STUDENT: TAKE CBT TEST ---------- */
+let currentCBTTest = null;
+let currentCBTAnswers = [];
+let cbtTimerInterval = null;
+async function openStudentCBT(){
+  const main = document.getElementById("mainContent");
+  main.innerHTML = `<div class="section-title">CBT Tests</div><div class="placeholder-note">Loading tests...</div>`;
+  try{
+    const snap = await db.collection("cbtTests")
+      .where("status","==","published")
+      .where("class","==",currentProfile.class)
+      .get();
+    let tests = [];
+    snap.forEach(doc => tests.push({id:doc.id, ...doc.data()}));
+    tests = tests.filter(t => t.term === defaultTerm && t.session === defaultSession);
+
+    if(!tests.length){
+      main.innerHTML = `<div class="section-title">CBT Tests</div><div class="placeholder-note">No CBT tests are currently available for your class.</div>`;
+      return;
+    }
+
+    const attemptChecks = await Promise.all(tests.map(t => db.collection("cbtAttempts").doc(`${t.id}_${currentUser.uid}`).get()));
+
+    const cards = tests.map((t, i) => {
+      const attempt = attemptChecks[i].exists ? attemptChecks[i].data() : null;
+      return `
+        <div class="card" style="padding:14px;margin-bottom:12px;">
+          <div style="font-weight:800;font-size:15px;">${esc(t.title)}</div>
+          <div style="font-size:12px;color:#666;margin-top:4px;">${esc(t.subject)} · ${(t.questions||[]).length} questions · ${esc(t.durationMinutes)} minutes</div>
+          ${attempt
+            ? `<div style="margin-top:10px;color:#0a7748;font-weight:700;">Completed — Score: ${esc(attempt.score)} / ${esc(attempt.totalQuestions)}</div>`
+            : `<button class="btn-primary" style="width:auto;margin-top:10px;" onclick="startCBTTest('${t.id}')">Start Test</button>`}
+        </div>
+      `;
+    }).join("");
+    main.innerHTML = `<div class="section-title">CBT Tests</div>${cards}`;
+  } catch(e){
+    main.innerHTML = `<div class="section-title">CBT Tests</div><div class="field-error">Error loading tests: ${e.message}</div>`;
+  }
+}
+async function startCBTTest(testId){
+  const main = document.getElementById("mainContent");
+  try{
+    // Double-check no attempt already exists before letting the student
+    // begin — this is what actually enforces "one attempt only",
+    // rather than relying on the list screen alone.
+    const existing = await db.collection("cbtAttempts").doc(`${testId}_${currentUser.uid}`).get();
+    if(existing.exists){
+      alert("You have already taken this test.");
+      openStudentCBT();
+      return;
+    }
+    const testDoc = await db.collection("cbtTests").doc(testId).get();
+    if(!testDoc.exists){ alert("This test is no longer available."); openStudentCBT(); return; }
+    currentCBTTest = { id: testId, ...testDoc.data() };
+    currentCBTAnswers = new Array(currentCBTTest.questions.length).fill(null);
+    renderCBTTestRunner();
+    startCBTTimer(currentCBTTest.durationMinutes * 60);
+  } catch(e){ alert("Unable to start test: " + e.message); }
+}
+function renderCBTTestRunner(){
+  const main = document.getElementById("mainContent");
+  const questionsHTML = currentCBTTest.questions.map((q, qi) => `
+    <div class="card" style="padding:14px;margin-bottom:12px;">
+      <div style="font-weight:600;margin-bottom:10px;">${qi+1}. ${esc(q.questionText)}</div>
+      ${q.options.map((opt, oi) => `
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px;">
+          <input type="radio" name="cbtq_${qi}" value="${oi}" style="width:auto;" onchange="currentCBTAnswers[${qi}]=${oi}">
+          ${esc(opt)}
+        </label>
+      `).join("")}
+    </div>
+  `).join("");
+  main.innerHTML = `
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>${esc(currentCBTTest.title)}</span>
+      <span id="cbtTimerDisplay" style="font-weight:800;color:#a31527;">--:--</span>
+    </div>
+    <div class="placeholder-note">Answer all questions, then submit. You have one attempt only — once submitted, this cannot be retaken.</div>
+    ${questionsHTML}
+    <button class="btn-primary" onclick="submitCBTTest()">Submit Test</button>
+  `;
+}
+function startCBTTimer(totalSeconds){
+  let remaining = totalSeconds;
+  const update = () => {
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    const el = document.getElementById("cbtTimerDisplay");
+    if(el) el.textContent = `${m}:${String(s).padStart(2,"0")}`;
+    if(remaining <= 0){
+      clearInterval(cbtTimerInterval);
+      alert("Time's up! Your test is being submitted automatically.");
+      submitCBTTest();
+      return;
+    }
+    remaining--;
+  };
+  update();
+  cbtTimerInterval = setInterval(update, 1000);
+}
+async function submitCBTTest(){
+  if(cbtTimerInterval) clearInterval(cbtTimerInterval);
+  const test = currentCBTTest;
+  if(!test) return;
+
+  let score = 0;
+  test.questions.forEach((q, qi) => {
+    if(currentCBTAnswers[qi] === q.correctIndex) score++;
+  });
+
+  const main = document.getElementById("mainContent");
+  main.innerHTML = `<div class="section-title">Submitting...</div><div class="placeholder-note">Please wait.</div>`;
+
+  try{
+    await db.collection("cbtAttempts").doc(`${test.id}_${currentUser.uid}`).set({
+      testId: test.id, studentUid: currentUser.uid,
+      studentName: currentProfile.name || currentUser.email,
+      class: currentProfile.class, subject: test.subject,
+      answers: currentCBTAnswers, score, totalQuestions: test.questions.length,
+      submittedAt: new Date().toISOString()
+    });
+    main.innerHTML = `
+      <div class="section-title">Test Submitted ✓</div>
+      <div class="card" style="padding:20px;text-align:center;">
+        <div style="font-size:14px;color:#666;">${esc(test.title)}</div>
+        <div style="font-size:36px;font-weight:800;margin-top:8px;color:#0a7748;">${score} / ${test.questions.length}</div>
+      </div>
+      <button class="btn-secondary" style="margin-top:16px;" onclick="openStudentCBT()">Back to CBT Tests</button>
+    `;
+    currentCBTTest = null;
+    currentCBTAnswers = [];
+  } catch(e){
+    main.innerHTML = `<div class="section-title">Submission Error</div><div class="field-error">${e.message}</div><button class="btn-secondary" onclick="submitCBTTest()">Try Again</button>`;
+  }
+}
+
 /* ---------------- LOGIN / LOGOUT ---------------- */
 function handleLogin(){
   const email = document.getElementById("email").value.trim();
@@ -1718,6 +2189,10 @@ function renderGeneralAdmin(view){
           <div class="icon">📝</div>
           <div class="label">Admissions</div>
         </div>
+        <div class="tile" onclick="openCBTTests('general')">
+          <div class="icon">🖥️</div>
+          <div class="label">CBT Tests</div>
+        </div>
         <div class="tile" onclick="openAnnouncementsAdmin('both')">
           <div class="icon">📢</div>
           <div class="label">Announcements (Both Levels)</div>
@@ -1855,6 +2330,10 @@ function levelAdminTiles(level){
         <div class="icon">📝</div>
         <div class="label">Admissions</div>
       </div>
+      <div class="tile" onclick="openCBTTests('${lvl}')">
+        <div class="icon">🖥️</div>
+        <div class="label">CBT Tests</div>
+      </div>
       <div class="tile" onclick="openAccountApprovals('${lvl}')">
         <div class="icon">✅</div>
         <div class="label">Account Approvals</div>
@@ -1921,6 +2400,14 @@ function renderTeacher(){
         <div class="icon">📋</div>
         <div class="label">CA List</div>
       </div>
+      <div class="tile" onclick="openQuestionBank()">
+        <div class="icon">📥</div>
+        <div class="label">Question Bank</div>
+      </div>
+      <div class="tile" onclick="openCBTScores()">
+        <div class="icon">📊</div>
+        <div class="label">CBT Scores</div>
+      </div>
       <div class="tile" onclick="openAnnouncementsView()">
         <div class="icon">📢</div>
         <div class="label">Announcements</div>
@@ -1938,6 +2425,10 @@ function renderStudent(){
       <div class="tile" onclick="openStudentResults()">
         <div class="icon">📝</div>
         <div class="label">Results</div>
+      </div>
+      <div class="tile" onclick="openStudentCBT()">
+        <div class="icon">🖥️</div>
+        <div class="label">CBT Tests</div>
       </div>
       <div class="tile" onclick="openStudentFeeStatus()">
         <div class="icon">💳</div>
