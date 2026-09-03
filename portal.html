@@ -3036,6 +3036,7 @@ function openResultsApproval(context){
   main.innerHTML = `
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">Results Approval</div>
+
     <div class="form-group">
       <label>Class</label>
       <select id="aClass">${classList.map(c => `<option value="${c}">${c}</option>`).join("")}</select>
@@ -3048,6 +3049,18 @@ function openResultsApproval(context){
       <label>Session</label>
       <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026">
     </div>
+
+    <div class="form-group" style="background:#f8f5f3; border:1px solid var(--gray-line); border-radius:10px; padding:12px;">
+      <label style="margin-bottom:8px;">Action Scope</label>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:500; margin-bottom:6px;">
+        <input type="radio" name="aScope" id="aScopeCurrent" value="current" checked> Current Class only
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:500;">
+        <input type="radio" name="aScope" id="aScopeAll" value="all"> All Classes
+      </label>
+      <div style="font-size:12px; color:#666; margin-top:6px;">"All Classes" applies Release / Hold to every class in this level for the chosen Term & Session.</div>
+    </div>
+
     <button class="btn-primary" onclick="loadResultsForApproval()">Load Class Results</button>
     <div class="field-error" id="aError"></div>
     <div id="aResultsArea" style="margin-top:16px;"></div>
@@ -3056,13 +3069,14 @@ function openResultsApproval(context){
 
 // Loads EVERY subject's results for the whole class at once — this is
 // the class-wide view Admin uses day-to-day, instead of picking one
-// subject at a time.
+// subject at a time. Also builds a student-level list for bulk Release / Hold.
 async function loadResultsForApproval(){
   const errBox = document.getElementById("aError");
   errBox.textContent = "";
   const cls = document.getElementById("aClass").value;
   const term = document.getElementById("aTerm").value;
   const session = document.getElementById("aSession").value.trim();
+  const scope = (document.querySelector('input[name="aScope"]:checked') || {}).value || "current";
 
   if(!session){
     errBox.textContent = "Please enter the session (e.g. 2025/2026).";
@@ -3073,31 +3087,116 @@ async function loadResultsForApproval(){
   area.innerHTML = `<div class="placeholder-note">Loading results...</div>`;
 
   try{
-    const snap = await db.collection("results")
-      .where("class","==",cls).where("term","==",term).where("session","==",session)
-      .get();
-
     let results = [];
-    snap.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
 
-    renderClassApprovalSummary(results, cls, term, session);
+    if(scope === "all"){
+      // Load all classes for the current admin level
+      const classList = resultsApprovalContext === "primary" ? PRIMARY_CLASSES
+        : resultsApprovalContext === "secondary" ? SECONDARY_CLASSES
+        : [...PRIMARY_CLASSES, ...SECONDARY_CLASSES];
+
+      // Firestore "in" is limited to 10, so we batch if needed
+      const batches = [];
+      for(let i = 0; i < classList.length; i += 10){
+        batches.push(classList.slice(i, i + 10));
+      }
+      for(const batch of batches){
+        const snap = await db.collection("results")
+          .where("class","in",batch)
+          .where("term","==",term)
+          .where("session","==",session)
+          .get();
+        snap.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
+      }
+    } else {
+      const snap = await db.collection("results")
+        .where("class","==",cls).where("term","==",term).where("session","==",session)
+        .get();
+      snap.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
+    }
+
+    renderClassApprovalSummary(results, cls, term, session, scope);
   } catch(e){
     area.innerHTML = `<div class="field-error">Error loading results: ${e.message}</div>`;
   }
 }
 
-function renderClassApprovalSummary(results, cls, term, session){
+function renderClassApprovalSummary(results, cls, term, session, scope){
   const area = document.getElementById("aResultsArea");
+  scope = scope || "current";
 
   if(results.length === 0){
-    area.innerHTML = `<div class="placeholder-note">No submitted results yet for ${cls} · ${term} · ${session}.</div>`;
+    area.innerHTML = `<div class="placeholder-note">No submitted results yet for ${scope === "all" ? "any class" : cls} · ${term} · ${session}.</div>`;
     return;
   }
 
   const submittedTotal = results.filter(r => r.status === "submitted").length;
   const generatedTotal = results.filter(r => r.status === "generated").length;
 
-  // Per-subject breakdown so Admin can see progress across the whole class at a glance
+  // ---- Student-level aggregation for Select All / individual release-hold ----
+  const byStudent = {};
+  results.forEach(r => {
+    const key = r.studentUid || r.studentName || r.id;
+    if(!byStudent[key]){
+      byStudent[key] = {
+        studentUid: r.studentUid,
+        studentName: r.studentName || "(unknown)",
+        class: r.class || "",
+        totalSubjects: 0,
+        generated: 0,
+        released: 0,
+        withheld: 0,
+        pending: 0
+      };
+    }
+    const s = byStudent[key];
+    s.totalSubjects++;
+    if(r.status === "submitted") s.pending++;
+    if(r.status === "generated"){
+      s.generated++;
+      if(r.released) s.released++;
+      if(r.withheld) s.withheld++;
+    }
+  });
+
+  const students = Object.values(byStudent).sort((a,b) => {
+    if(a.class !== b.class) return (a.class || "").localeCompare(b.class || "");
+    return (a.studentName || "").localeCompare(b.studentName || "");
+  });
+
+  // Store for bulk actions
+  window._approvalStudents = students;
+  window._approvalMeta = { cls, term, session, scope };
+
+  const studentRows = students.map((s, idx) => {
+    let statusText = "";
+    let statusColor = "#666";
+    if(s.pending > 0 && s.generated === 0){
+      statusText = `${s.pending} pending generation`;
+      statusColor = "#b00020";
+    } else if(s.released === s.generated && s.generated > 0){
+      statusText = `All ${s.generated} released`;
+      statusColor = "#1a7a1a";
+    } else if(s.withheld > 0){
+      statusText = `${s.released}/${s.generated} released · ${s.withheld} withheld`;
+      statusColor = "#b00020";
+    } else {
+      statusText = `${s.released}/${s.generated} released`;
+      statusColor = s.released > 0 ? "#1a7a1a" : "#b00020";
+    }
+
+    return `
+      <label style="display:flex; align-items:flex-start; gap:10px; padding:10px 8px; border-bottom:1px solid var(--gray-line); cursor:pointer;">
+        <input type="checkbox" class="a-student-check" value="${esc(s.studentUid || "")}" data-idx="${idx}" style="margin-top:3px;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:600;">${esc(s.studentName)}${scope === "all" ? ` <span style="font-weight:400; color:#666; font-size:12px;">(${esc(s.class)})</span>` : ""}</div>
+          <div style="font-size:12px; color:${statusColor}; margin-top:2px;">${statusText}</div>
+        </div>
+      </label>
+    `;
+  }).join("");
+
+  // Per-subject breakdown (only meaningful when viewing a single class)
   const bySubject = {};
   results.forEach(r => {
     if(!bySubject[r.subject]) bySubject[r.subject] = { submitted: 0, generated: 0 };
@@ -3109,14 +3208,41 @@ function renderClassApprovalSummary(results, cls, term, session){
       <td style="padding:6px 4px;">${subj}</td>
       <td style="padding:6px 4px;">${bySubject[subj].submitted}</td>
       <td style="padding:6px 4px;">${bySubject[subj].generated}</td>
-      <td style="padding:6px 4px;"><button class="btn-secondary" style="width:auto; margin:0; font-size:12px; padding:6px 10px;" onclick="openSubjectApprovalDetail('${cls}','${subj}','${term}',${js(session)})">Manage</button></td>
+      <td style="padding:6px 4px;">
+        ${scope === "current" ? `<button class="btn-secondary" style="width:auto; margin:0; font-size:12px; padding:6px 10px;" onclick="openSubjectApprovalDetail('${cls}','${subj}','${term}',${js(session)})">Manage</button>` : `<span style="font-size:12px; color:#999;">—</span>`}
+      </td>
     </tr>
   `).join("");
 
   area.innerHTML = `
+    <!-- Bulk student actions -->
+    <div style="background:#fff; border:1px solid var(--gray-line); border-radius:10px; padding:14px; margin-bottom:16px;">
+      <div style="font-weight:700; color:var(--maroon); margin-bottom:10px;">Student Release / Hold</div>
+      <div style="font-size:13px; color:#555; margin-bottom:10px;">
+        Scope: <strong>${scope === "all" ? "All Classes" : cls}</strong> · ${students.length} student${students.length === 1 ? "" : "s"} with results
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+        <button class="btn-primary" style="width:auto; margin:0; padding:10px 14px;" onclick="bulkStudentRelease(true)">Release Selected</button>
+        <button class="btn-secondary" style="width:auto; margin:0; padding:10px 14px; border-color:var(--maroon); color:var(--maroon);" onclick="bulkStudentRelease(false)">Hold Selected</button>
+        <button class="btn-primary" style="width:auto; margin:0; padding:10px 14px;" onclick="bulkStudentReleaseAll(true)">Release All</button>
+        <button class="btn-secondary" style="width:auto; margin:0; padding:10px 14px; border-color:#555; color:#333;" onclick="bulkStudentReleaseAll(false)">Hold All</button>
+      </div>
+
+      <label style="display:flex; align-items:center; gap:8px; font-weight:600; margin-bottom:8px; padding:6px 0;">
+        <input type="checkbox" id="aSelectAllStudents" onchange="toggleSelectAllStudents(this.checked)"> Select All (${students.length})
+      </label>
+
+      <div style="max-height:320px; overflow-y:auto; border:1px solid var(--gray-line); border-radius:8px; background:#fafafa;">
+        ${studentRows}
+      </div>
+      <div id="aSelectedCount" style="font-size:12px; color:#666; margin-top:8px;">0 selected</div>
+    </div>
+
+    <!-- Existing subject-level actions -->
     <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
-      <button class="btn-primary" style="width:auto; margin:0;" ${submittedTotal === 0 ? "disabled" : ""} onclick="generateAllSubjects('${cls}','${term}',${js(session)})">Generate All Subjects (${submittedTotal} pending)</button>
-      <button class="btn-primary" style="width:auto; margin:0;" ${generatedTotal === 0 ? "disabled" : ""} onclick="releaseAllSubjects('${cls}','${term}',${js(session)})">Release All Subjects</button>
+      <button class="btn-primary" style="width:auto; margin:0;" ${submittedTotal === 0 || scope === "all" ? "disabled" : ""} onclick="generateAllSubjects('${cls}','${term}',${js(session)})">Generate All Subjects (${submittedTotal} pending)</button>
+      <button class="btn-primary" style="width:auto; margin:0;" ${generatedTotal === 0 || scope === "all" ? "disabled" : ""} onclick="releaseAllSubjects('${cls}','${term}',${js(session)})">Release All Subjects (class)</button>
     </div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
@@ -3128,8 +3254,118 @@ function renderClassApprovalSummary(results, cls, term, session){
         <tbody>${subjectRows}</tbody>
       </table>
     </div>
-    <div class="placeholder-note" style="margin-top:12px;">Tap "Manage" next to a subject to withhold or release individual students. Otherwise, the two buttons above handle the whole class in one tap.</div>
+    <div class="placeholder-note" style="margin-top:12px;">
+      Use the student checkboxes above to Release or Hold specific students (across all their subjects). 
+      ${scope === "current" ? 'Tap "Manage" next to a subject for per-subject control.' : 'Switch to "Current Class only" to use per-subject Manage buttons.'}
+    </div>
   `;
+
+  // Live selected count
+  document.querySelectorAll(".a-student-check").forEach(cb => {
+    cb.addEventListener("change", updateSelectedStudentCount);
+  });
+}
+
+function toggleSelectAllStudents(checked){
+  document.querySelectorAll(".a-student-check").forEach(cb => cb.checked = checked);
+  updateSelectedStudentCount();
+}
+
+function updateSelectedStudentCount(){
+  const n = document.querySelectorAll(".a-student-check:checked").length;
+  const el = document.getElementById("aSelectedCount");
+  if(el) el.textContent = n + " selected";
+}
+
+async function bulkStudentRelease(releaseValue){
+  const meta = window._approvalMeta;
+  if(!meta){ alert("Please load results first."); return; }
+  const { term, session, scope, cls } = meta;
+
+  const selected = [...document.querySelectorAll(".a-student-check:checked")].map(cb => cb.value).filter(Boolean);
+  if(selected.length === 0){
+    alert("Select at least one student.");
+    return;
+  }
+
+  const action = releaseValue ? "Release" : "Hold";
+  if(!confirm(`${action} results for ${selected.length} selected student${selected.length === 1 ? "" : "s"}?`)) return;
+
+  const errBox = document.getElementById("aError");
+  errBox.textContent = "";
+  const area = document.getElementById("aResultsArea");
+  const prevHTML = area.innerHTML;
+  area.innerHTML = `<div class="placeholder-note">${action}ing selected students...</div>`;
+
+  try{
+    // Query results for these students in the term/session
+    // Firestore "in" limit 10 → batch the student UIDs
+    const batches = [];
+    for(let i = 0; i < selected.length; i += 10){
+      batches.push(selected.slice(i, i + 10));
+    }
+
+    let updated = 0;
+    for(const batch of batches){
+      let q = db.collection("results")
+        .where("studentUid","in",batch)
+        .where("term","==",term)
+        .where("session","==",session)
+        .where("status","==","generated");
+
+      // When scope is current class, also filter by class for safety
+      if(scope === "current"){
+        q = q.where("class","==",cls);
+      }
+
+      const snap = await q.get();
+      const updates = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        // Never force-release a withheld result
+        if(releaseValue && d.withheld) return;
+        updates.push(doc.ref.update({
+          released: releaseValue,
+          releasedBy: currentUser.uid,
+          releasedAt: new Date().toISOString()
+        }));
+      });
+      await Promise.all(updates);
+      updated += updates.length;
+    }
+
+    // Reload
+    loadResultsForApproval();
+    setTimeout(() => {
+      if(document.getElementById("aError")){
+        document.getElementById("aError").textContent = "";
+      }
+    }, 100);
+  } catch(e){
+    area.innerHTML = prevHTML;
+    errBox.textContent = "Error: " + e.message;
+  }
+}
+
+async function bulkStudentReleaseAll(releaseValue){
+  const meta = window._approvalMeta;
+  if(!meta){ alert("Please load results first."); return; }
+  const { term, session, scope, cls } = meta;
+  const students = window._approvalStudents || [];
+
+  if(students.length === 0){
+    alert("No students loaded.");
+    return;
+  }
+
+  const action = releaseValue ? "Release" : "Hold";
+  const scopeLabel = scope === "all" ? "ALL classes" : cls;
+  if(!confirm(`${action} results for ALL ${students.length} student${students.length === 1 ? "" : "s"} in ${scopeLabel}?`)) return;
+
+  // Select all then call the selected path
+  document.querySelectorAll(".a-student-check").forEach(cb => cb.checked = true);
+  updateSelectedStudentCount();
+  await bulkStudentRelease(releaseValue);
 }
 
 async function generateAllSubjects(cls, term, session){
@@ -3188,12 +3424,17 @@ function openSubjectApprovalDetail(cls, subject, term, session){
 }
 
 function loadResultsForApprovalReturn(cls, term, session){
-  document.getElementById("aClass") ? null : null; // no-op guard
   openResultsApproval(resultsApprovalContext);
   setTimeout(() => {
-    document.getElementById("aClass").value = cls;
-    document.getElementById("aTerm").value = term;
-    document.getElementById("aSession").value = session;
+    const classEl = document.getElementById("aClass");
+    const termEl = document.getElementById("aTerm");
+    const sessionEl = document.getElementById("aSession");
+    if(classEl) classEl.value = cls;
+    if(termEl) termEl.value = term;
+    if(sessionEl) sessionEl.value = session;
+    // Keep "Current Class only" selected when returning from subject detail
+    const currentRadio = document.getElementById("aScopeCurrent");
+    if(currentRadio) currentRadio.checked = true;
     loadResultsForApproval();
   }, 0);
 }
