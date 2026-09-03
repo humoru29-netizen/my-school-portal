@@ -1,0 +1,35 @@
+{
+  "name": "Faith International School",
+  "short_name": "FIS Itobe",
+  "description": "Faith International School, Itobe, Ofu LGA, Kogi State. Excellence, character and a brighter future.",
+  "id": "/index.html",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#087443",
+  "lang": "en",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["education"],
+  "screenshots": []
+}
