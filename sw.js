@@ -3,7 +3,7 @@
    for the UI. Firebase data still requires an internet connection.
 */
 
-const CACHE_NAME = "fis-portal-v1";
+const CACHE_NAME = "fis-portal-v2";
 const SHELL_ASSETS = [
   "./portal.html",
   "./manifest.json",
