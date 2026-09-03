@@ -1305,51 +1305,81 @@ async function rejectAccount(uid){
 
 /* ================= ADMISSIONS ================= */
 let admissionsContext = "general";
-let admissionRequests = [];
+let allAdmissionRequests = [];   // everything fetched for this context — never mutated by decisions
+let admissionStatusFilter = "pending";
 function canManageAdmissions(){
   return ["general_admin","primary_admin","secondary_admin"].includes(currentProfile && currentProfile.role);
 }
 async function openAdmissions(context){
   if(!canManageAdmissions()){ alert("You are not authorised to manage admissions."); return; }
   admissionsContext = context || "general";
+  admissionStatusFilter = "pending";
   const main = document.getElementById("mainContent");
-  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">Admission Applications</div><div class="placeholder-note">Loading pending applications...</div>`;
+  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">Admission Applications</div><div class="placeholder-note">Loading applications...</div>`;
   try{
-    const snap = await db.collection("admissions").where("status","==","pending").get();
-    admissionRequests = [];
-    snap.forEach(doc => admissionRequests.push({id:doc.id,...doc.data()}));
-    if(admissionsContext !== "general") admissionRequests = admissionRequests.filter(r => r.level === admissionsContext);
-    admissionRequests.sort((a,b) => (a.submittedAt||"").localeCompare(b.submittedAt||""));
+    // Fetch every application regardless of status — Accepted/Rejected
+    // applications stay reachable afterward via the status tabs below,
+    // instead of only ever being visible once (while still pending).
+    const snap = await db.collection("admissions").get();
+    allAdmissionRequests = [];
+    snap.forEach(doc => allAdmissionRequests.push({id:doc.id,...doc.data()}));
+    if(admissionsContext !== "general") allAdmissionRequests = allAdmissionRequests.filter(r => r.level === admissionsContext);
+    allAdmissionRequests.sort((a,b) => (b.submittedAt||"").localeCompare(a.submittedAt||""));
     renderAdmissions();
   } catch(e){
     main.innerHTML = `<div class="section-title">Admission Applications</div><div class="field-error">Error loading applications: ${e.message}</div>`;
   }
 }
+function setAdmissionStatusFilter(status){
+  admissionStatusFilter = status;
+  renderAdmissions();
+}
 function renderAdmissions(){
   const main = document.getElementById("mainContent");
-  if(!admissionRequests.length){
-    main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">Admission Applications</div><div class="placeholder-note">No pending admission applications.</div>`;
-    return;
-  }
-  const cards = admissionRequests.map(r => `
+  const counts = { pending:0, accepted:0, rejected:0 };
+  allAdmissionRequests.forEach(r => { if(counts[r.status] !== undefined) counts[r.status]++; });
+  const total = allAdmissionRequests.length;
+
+  const tabs = [
+    ["pending", `Pending (${counts.pending})`],
+    ["accepted", `Accepted (${counts.accepted})`],
+    ["rejected", `Rejected (${counts.rejected})`],
+    ["all", `All (${total})`]
+  ].map(([key,label]) => `<button class="${admissionStatusFilter===key ? 'btn-primary' : 'btn-secondary'}" style="width:auto;" onclick="setAdmissionStatusFilter('${key}')">${label}</button>`).join(" ");
+
+  const visible = admissionStatusFilter === "all"
+    ? allAdmissionRequests
+    : allAdmissionRequests.filter(r => r.status === admissionStatusFilter);
+
+  const statusBadge = (status) => {
+    const colors = { pending:"#a3791b", accepted:"#0a7748", rejected:"#a31527" };
+    return `<span style="font-size:11px;font-weight:700;color:${colors[status]||'#666'};text-transform:uppercase;">${esc(status||"")}</span>`;
+  };
+
+  const cards = visible.length ? visible.map(r => `
     <div class="card" style="padding:14px;margin-bottom:12px;display:flex;gap:12px;">
       ${r.photoURL ? `<img src="${esc(r.photoURL)}" alt="Passport photo" style="width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0;">` : ""}
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:800;font-size:15px;">${esc(r.applicantName || "Unnamed applicant")}</div>
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+          <div style="font-weight:800;font-size:15px;">${esc(r.applicantName || "Unnamed applicant")}</div>
+          ${statusBadge(r.status)}
+        </div>
         <div style="font-size:12px;color:#666;margin-top:4px;overflow-wrap:anywhere;">${esc(r.level || "")} · ${esc(r.class || "")} · DOB: ${esc(r.dob || "")} · ${esc(r.gender || "")}</div>
         <div style="font-size:12px;color:#666;margin-top:4px;overflow-wrap:anywhere;">Guardian: ${esc(r.guardianName || "")} · ${esc(r.guardianPhone || "")}</div>
+        ${r.status === "accepted" && r.admissionNo ? `<div style="font-size:12px;color:#0a7748;margin-top:4px;">Admission No: <strong>${esc(r.admissionNo)}</strong> · Class: ${esc(r.assignedClass||"")}</div>` : ""}
         ${r.documentURLs && r.documentURLs.length ? `<div style="font-size:12px;color:#666;margin-top:4px;">📎 ${r.documentURLs.length} document(s) attached</div>` : ""}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-          <button class="btn-primary" style="width:auto;min-width:120px;" onclick="openAdmissionDecision('${r.id}')">Review &amp; Decide</button>
+          ${r.status === "pending" ? `<button class="btn-primary" style="width:auto;min-width:120px;" onclick="openAdmissionDecision('${r.id}')">Review &amp; Decide</button>` : ""}
           <button class="btn-secondary" style="width:auto;" onclick="printAdmission('${r.id}')">🖨️ Print</button>
-          <button class="btn-secondary" style="width:auto;color:#a31527;" onclick="rejectAdmission('${r.id}')">Reject</button>
+          ${r.status === "pending" ? `<button class="btn-secondary" style="width:auto;color:#a31527;" onclick="rejectAdmission('${r.id}')">Reject</button>` : ""}
         </div>
       </div>
-    </div>`).join("");
-  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">Admission Applications (${admissionRequests.length})</div>${cards}`;
+    </div>`).join("") : `<div class="placeholder-note">No ${admissionStatusFilter === "all" ? "" : admissionStatusFilter} applications.</div>`;
+
+  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">Admission Applications</div><div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px;">${tabs}<button class="btn-secondary" style="width:auto;" onclick="printBlankAdmissionForm()">🖨️ Print Blank Form</button></div>${cards}`;
 }
 function openAdmissionDecision(id){
-  const r = admissionRequests.find(x => x.id === id); if(!r) return;
+  const r = allAdmissionRequests.find(x => x.id === id); if(!r) return;
   const classes = r.level === "primary" ? PRIMARY_CLASSES : SECONDARY_CLASSES;
   const modal = document.getElementById("accountModal");
   document.getElementById("modalTitle").textContent = "Accept Application";
@@ -1363,7 +1393,7 @@ function openAdmissionDecision(id){
     </div>
     <div class="form-group"><label>Class to Admit Into</label><select id="admDecisionClass">${classes.map(c => `<option value="${esc(c)}" ${c===r.class?'selected':''}>${esc(c)}</option>`).join("")}</select></div>
     <div class="form-group"><label><input type="checkbox" id="admDecisionAssignNo" checked style="width:auto;margin-right:6px;">Assign an Admission Number now</label></div>
-    <div class="signup-note">After acceptance, use <strong>Create Account</strong> to set up this student's login, using the assigned Admission Number and class above.</div>
+    <div class="signup-note">After acceptance, use <strong>Create Account</strong> to set up this student's login, using the assigned Admission Number and class above. Accepted applications stay visible under the <strong>Accepted</strong> tab so you can find them again later.</div>
     <div class="field-error" id="admDecisionError"></div>
     <button class="btn-primary" onclick="acceptAdmission('${id}')">Accept Application</button>
     <button class="btn-secondary" onclick="closeAccountModal()">Cancel</button>`;
@@ -1374,7 +1404,7 @@ async function acceptAdmission(id){
   const cls = document.getElementById("admDecisionClass").value;
   const assignNo = document.getElementById("admDecisionAssignNo").checked;
   try{
-    const r = admissionRequests.find(x=>x.id===id);
+    const r = allAdmissionRequests.find(x=>x.id===id);
     if(!r) return;
     const update = {
       status: "accepted", assignedClass: cls,
@@ -1385,24 +1415,27 @@ async function acceptAdmission(id){
     }
     await db.collection("admissions").doc(id).update(update);
     closeAccountModal();
-    admissionRequests = admissionRequests.filter(x=>x.id!==id);
+    // Update in place rather than removing — the application moves from
+    // the Pending tab to the Accepted tab, it doesn't disappear.
+    Object.assign(r, update);
     renderAdmissions();
     if(update.admissionNo){
-      alert(`Application accepted. Admission Number assigned: ${update.admissionNo}\n\nUse "Create Account" to set up this student's portal login.`);
+      alert(`Application accepted. Admission Number assigned: ${update.admissionNo}\n\nUse "Create Account" to set up this student's portal login. You can find this application again anytime under the Accepted tab.`);
     }
   } catch(e){ err.textContent = "Unable to accept application: " + e.message; }
 }
 async function rejectAdmission(id){
-  const r = admissionRequests.find(x=>x.id===id); if(!r) return;
+  const r = allAdmissionRequests.find(x=>x.id===id); if(!r) return;
   if(!confirm(`Reject the admission application from ${r.applicantName || "this applicant"}?`)) return;
   try{
-    await db.collection("admissions").doc(id).update({status:"rejected", rejectedAt:new Date().toISOString(), rejectedBy:currentUser.uid});
-    admissionRequests = admissionRequests.filter(x=>x.id!==id);
+    const update = {status:"rejected", rejectedAt:new Date().toISOString(), rejectedBy:currentUser.uid};
+    await db.collection("admissions").doc(id).update(update);
+    Object.assign(r, update);
     renderAdmissions();
   } catch(e){ alert("Unable to reject application: " + e.message); }
 }
 function printAdmission(id){
-  const r = admissionRequests.find(x=>x.id===id); if(!r) return;
+  const r = allAdmissionRequests.find(x=>x.id===id); if(!r) return;
   openPrintWindow(`
     <div style="text-align:center;margin-bottom:20px;">
       <h2>Faith International School, Itobe — Admission Application</h2>
@@ -1414,6 +1447,8 @@ function printAdmission(id){
       <tr><td><strong>Gender</strong></td><td>${esc(r.gender||"")}</td></tr>
       <tr><td><strong>Level</strong></td><td>${esc(r.level||"")}</td></tr>
       <tr><td><strong>Class Applied For</strong></td><td>${esc(r.class||"")}</td></tr>
+      <tr><td><strong>Status</strong></td><td>${esc(r.status||"")}</td></tr>
+      ${r.status === "accepted" ? `<tr><td><strong>Admission Number</strong></td><td>${esc(r.admissionNo||"")}</td></tr><tr><td><strong>Assigned Class</strong></td><td>${esc(r.assignedClass||"")}</td></tr>` : ""}
       <tr><td><strong>Parent/Guardian</strong></td><td>${esc(r.guardianName||"")}</td></tr>
       <tr><td><strong>Guardian Phone</strong></td><td>${esc(r.guardianPhone||"")}</td></tr>
       <tr><td><strong>Guardian Email</strong></td><td>${esc(r.guardianEmail||"")}</td></tr>
@@ -1423,6 +1458,53 @@ function printAdmission(id){
       <tr><td><strong>Medical/Emergency Info</strong></td><td>${esc(r.medicalInfo||"")}</td></tr>
       <tr><td><strong>Documents Attached</strong></td><td>${r.documentURLs && r.documentURLs.length ? r.documentURLs.map(d=>esc(d.name)).join(", ") : "None"}</td></tr>
       <tr><td><strong>Submitted</strong></td><td>${esc(r.submittedAt||"")}</td></tr>
+    </table>
+  `);
+}
+
+// Prints a blank, hand-fillable version of the same admission form —
+// for the school office to hand out or use to collect applications
+// offline, then enter into the portal afterward. Not tied to any
+// specific applicant record.
+function printBlankAdmissionForm(){
+  const line = (width) => `<span style="display:inline-block;border-bottom:1px solid #000;min-width:${width||180}px;height:18px;"></span>`;
+  openPrintWindow(`
+    <div style="text-align:center;margin-bottom:10px;">
+      <h2>Faith International School, Itobe</h2>
+      <p style="margin-top:4px;">Admission Application Form</p>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:16px;">
+      <div style="width:110px;height:130px;border:1px solid #000;display:flex;align-items:center;justify-content:center;font-size:11px;text-align:center;">Passport<br>Photograph</div>
+    </div>
+    <table>
+      <tr><td style="width:220px;"><strong>Applicant Full Name</strong></td><td>${line(300)}</td></tr>
+      <tr><td><strong>Date of Birth</strong></td><td>${line(220)} &nbsp;&nbsp; <strong>Gender:</strong> &nbsp; ☐ Male &nbsp; ☐ Female</td></tr>
+      <tr><td><strong>Level Applying For</strong></td><td>☐ Primary &nbsp;&nbsp; ☐ Secondary</td></tr>
+      <tr><td><strong>Class Applying For</strong></td><td>${line(220)}</td></tr>
+      <tr><td><strong>Previous School</strong></td><td>${line(300)}</td></tr>
+      <tr><td><strong>Parent/Guardian Full Name</strong></td><td>${line(300)}</td></tr>
+      <tr><td><strong>Parent/Guardian Phone</strong></td><td>${line(220)}</td></tr>
+      <tr><td><strong>Parent/Guardian Email</strong></td><td>${line(300)}</td></tr>
+      <tr><td><strong>Home Address</strong></td><td>${line(300)}</td></tr>
+      <tr><td><strong>State/LGA of Origin</strong></td><td>${line(300)}</td></tr>
+      <tr><td><strong>Medical/Emergency Information</strong></td><td>${line(300)}<br><br>${line(300)}</td></tr>
+    </table>
+    <div style="margin-top:16px;font-size:13px;">
+      <strong>Required Documents Attached:</strong><br>
+      ☐ Birth Certificate &nbsp;&nbsp; ☐ Previous School Result/Report &nbsp;&nbsp; ☐ Passport Photograph &nbsp;&nbsp; ☐ Other: ${line(150)}
+    </div>
+    <div style="margin-top:20px;font-size:13px;line-height:1.6;">
+      <strong>Declaration/Consent:</strong> I declare that the information provided above is true and correct to the best of my knowledge, and I consent to Faith International School processing this information for the purpose of considering this admission application.
+    </div>
+    <table style="margin-top:30px;">
+      <tr><td style="width:250px;"><strong>Parent/Guardian Signature</strong></td><td>${line(250)}</td><td style="width:100px;"><strong>Date</strong></td><td>${line(150)}</td></tr>
+    </table>
+    <div style="margin-top:30px;padding-top:14px;border-top:1px dashed #999;font-size:12px;color:#555;">
+      <strong>For Office Use Only</strong>
+    </div>
+    <table style="margin-top:8px;">
+      <tr><td style="width:200px;"><strong>Reviewed By</strong></td><td>${line(220)}</td><td style="width:100px;"><strong>Date</strong></td><td>${line(150)}</td></tr>
+      <tr><td><strong>Decision</strong></td><td>☐ Accepted &nbsp;&nbsp; ☐ Rejected</td><td><strong>Admission No.</strong></td><td>${line(150)}</td></tr>
     </table>
   `);
 }
