@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Faith International School, Itobe, Ofu Local Government Area, Kogi State. Excellence, character and a brighter future.">
 <title>Faith International School | Itobe, Kogi State</title>
+<link rel="icon" type="image/png" href="crest-128.png">
 <style>
 :root{
   --green:#087443; --dark:#073d2a; --gold:#f2c94c; --cream:#f7faf8;
@@ -20,7 +21,8 @@ a{text-decoration:none;color:inherit}
 header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-bottom:1px solid #e7ece9}
 .nav{height:76px;display:flex;align-items:center;justify-content:space-between;gap:25px}
 .brand{display:flex;align-items:center;gap:12px;font-weight:800}
-.logo{width:50px;height:50px;border-radius:14px;background:var(--green);color:#fff;display:grid;place-items:center;font-size:21px;box-shadow:0 7px 18px #08744333}
+.logo{width:50px;height:50px;border-radius:14px;background:#fff;display:grid;place-items:center;box-shadow:0 7px 18px #08744333;overflow:hidden;padding:3px}
+.logo img{width:100%;height:100%;object-fit:contain}
 .brand small{display:block;color:var(--green);font-size:11px;letter-spacing:2px}
 nav{display:flex;align-items:center;gap:24px;font-weight:600;font-size:15px}
 nav a:hover{color:var(--green)}
@@ -105,7 +107,7 @@ textarea{min-height:100px;resize:vertical}
 <header>
 <div class="container nav">
   <a class="brand" href="#home">
-    <div class="logo">FIS</div>
+    <div class="logo"><img src="crest-128.png" alt="FISS Crest"></div>
     <div>Faith International School<small>ITOBE • KOGI STATE</small></div>
   </a>
   <button class="menu" onclick="toggleMenu()" aria-label="Open menu">☰</button>
@@ -130,7 +132,7 @@ textarea{min-height:100px;resize:vertical}
     </div>
   </div>
   <div class="hero-card">
-    <div class="school-mark">FIS</div>
+    <div class="school-mark"><img src="crest-256.png" alt="FISS Crest" style="width:100%;height:100%;object-fit:contain"></div>
     <h3>Faith International School</h3>
     <p>Itobe, Ofu LGA, Kogi State</p>
     <div class="stats">
@@ -279,4 +281,4 @@ document.getElementById('year').textContent=new Date().getFullYear();
 document.querySelectorAll('nav a').forEach(a=>a.addEventListener('click',()=>document.getElementById('nav').classList.remove('show')));
 </script>
 </body>
-</html>
+                                         </html>
