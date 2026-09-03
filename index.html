@@ -115,6 +115,7 @@ textarea{min-height:100px;resize:vertical}
   <button class="menu" onclick="toggleMenu()" aria-label="Open menu">☰</button>
   <nav id="nav">
     <a href="#home">Home</a><a href="#about">About</a><a href="#academics">Academics</a><a href="#admissions">Admissions</a><a href="#contact">Contact</a>
+    <a href="#" onclick="openCheckResult();return false">🔍 Check My Result</a>
     <a class="btn outline" href="portal.html">Portal Login</a>
     <a class="btn" href="#" onclick="openModal('enquiry');return false">Enquire Now</a>
   </nav>
@@ -271,6 +272,175 @@ textarea{min-height:100px;resize:vertical}
 </div>
 </div>
 
+<div class="modal" id="resultModal">
+<div class="modal-box">
+<button class="close" onclick="closeCheckResult()">×</button>
+<h2>Check My Result</h2>
+<p style="color:#66736d;margin-top:5px" id="resultModalSub">No login needed — enter the Admission Number and PIN given by the school.</p>
+<form onsubmit="event.preventDefault();submitCheckResult()" id="resultFormArea">
+<input required id="crAdmissionNo" placeholder="Admission Number, e.g. FISS/2026/00014">
+<input required id="crPin" placeholder="6-digit PIN" inputmode="numeric" maxlength="6">
+<div id="crError" style="color:#a31527;font-size:13px;min-height:18px;"></div>
+<button class="btn" type="submit" id="crSubmitBtn">Check Result</button>
+</form>
+<div id="resultOutputArea" style="display:none;"></div>
+</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBu_SNTOj-nprZtPgxQoZNVRS-w8cV7-FU",
+  authDomain: "myschoolportal-53158.firebaseapp.com",
+  projectId: "myschoolportal-53158",
+  storageBucket: "myschoolportal-53158.firebasestorage.app",
+  messagingSenderId: "728505506353",
+  appId: "1:728505506353:web:6cb995bb4e745769015310"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+function esc(str){
+  return String(str == null ? "" : str).replace(/[&<>"']/g, function(m){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m];
+  });
+}
+function js(v){
+  return JSON.stringify(v).replace(/"/g, "&quot;");
+}
+function resultLookupId(admissionNo, pin){
+  const clean = s => String(s).trim().replace(/\//g, "-");
+  return `${clean(admissionNo)}_${clean(pin)}`;
+}
+function openPrintWindow(bodyHTML){
+  const fullHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faith International School, Itobe — Print</title>
+  <style>
+    body{ font-family: Georgia, 'Times New Roman', serif; color:#111; margin:20px; }
+    table{ width:100%; border-collapse:collapse; }
+    th, td{ border:1px solid #000; padding:6px 8px; text-align:left; font-size:13px; }
+    .print-btn-bar{ text-align:center; margin-bottom:20px; }
+    .print-btn-bar button{
+      padding:14px 28px; font-size:16px; font-weight:700; color:#fff;
+      background:#087443; border:none; border-radius:8px;
+    }
+    @media print{ .print-btn-bar{ display:none !important; } }
+  </style>
+</head>
+<body>
+  <div class="print-btn-bar"><button onclick="window.print()">🖨️ Print This Page</button></div>
+  ${bodyHTML}
+</body>
+</html>`;
+  const blob = new Blob([fullHTML], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank");
+  if(!win){ alert("Please allow pop-ups for this site so results can open for printing."); }
+}
+function openCheckResult(){
+  document.getElementById("crError").textContent = "";
+  document.getElementById("resultFormArea").style.display = "grid";
+  document.getElementById("resultOutputArea").style.display = "none";
+  document.getElementById("resultOutputArea").innerHTML = "";
+  document.getElementById("resultModal").classList.add("open");
+}
+function closeCheckResult(){
+  document.getElementById("resultModal").classList.remove("open");
+}
+async function submitCheckResult(){
+  const admissionNo = document.getElementById("crAdmissionNo").value.trim();
+  const pin = document.getElementById("crPin").value.trim();
+  const errBox = document.getElementById("crError");
+  const btn = document.getElementById("crSubmitBtn");
+  errBox.textContent = "";
+  if(!admissionNo || !pin){
+    errBox.textContent = "Please enter both the Admission Number and PIN.";
+    return;
+  }
+  btn.disabled = true; btn.textContent = "Checking...";
+  try{
+    const lookupDoc = await db.collection("resultLookup").doc(resultLookupId(admissionNo, pin)).get();
+    if(!lookupDoc.exists){
+      errBox.textContent = "No result found for that Admission Number and PIN. Please check with the school office.";
+      return;
+    }
+    const info = lookupDoc.data();
+    const settingsDoc = await db.collection("settings").doc("current").get();
+    const liveTerm = settingsDoc.exists ? (settingsDoc.data().term || "") : "";
+    const liveSession = settingsDoc.exists ? (settingsDoc.data().session || "") : "";
+    if(info.term !== liveTerm || info.session !== liveSession){
+      errBox.textContent = "This PIN was issued for a previous term and has expired. Please contact the school office for a new PIN.";
+      return;
+    }
+    const snap = await db.collection("results")
+      .where("studentUid","==",info.studentUid).where("released","==",true)
+      .get();
+    let results = [];
+    snap.forEach(doc => results.push(doc.data()));
+    const outputArea = document.getElementById("resultOutputArea");
+    if(results.length === 0){
+      outputArea.innerHTML = `
+        <h3 style="margin-top:16px;">${esc(info.name)} — ${esc(info.class || "")}</h3>
+        <p style="color:#66736d;">No results have been released yet for this student.</p>
+        <button class="btn outline" style="margin-top:10px;" onclick="closeCheckResult()">Close</button>
+      `;
+    } else {
+      const grouped = {};
+      results.forEach(r => {
+        const key = `${r.term} — ${r.session}`;
+        if(!grouped[key]) grouped[key] = [];
+        grouped[key].push(r);
+      });
+      const sections = Object.keys(grouped).map(key => `
+        <h4 style="margin-top:14px;">${esc(key)}</h4>
+        ${grouped[key].map(r => `
+          <div style="display:flex; justify-content:space-between; border:1px solid #e4ebe7; border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:14px;">
+            <div>${esc(r.subject)}</div>
+            <div>CA1:${esc(r.ca1)} CA2:${esc(r.ca2)} Exam:${esc(r.exam)} — <strong>${esc(r.total)} (${esc(r.grade)})</strong></div>
+          </div>
+        `).join("")}
+      `).join("");
+      outputArea.innerHTML = `
+        <h3 style="margin-top:16px;">${esc(info.name)} — ${esc(info.class || "")}</h3>
+        ${sections}
+        <button class="btn" style="margin-top:12px;" onclick="printCheckedResult(${js(info)}, ${js(results)})">🖨️ Print This Result</button>
+        <button class="btn outline" style="margin-top:8px;" onclick="closeCheckResult()">Close</button>
+      `;
+    }
+    document.getElementById("resultFormArea").style.display = "none";
+    outputArea.style.display = "block";
+  } catch(e){
+    errBox.textContent = "Error checking result: " + e.message;
+  } finally{
+    btn.disabled = false; btn.textContent = "Check Result";
+  }
+}
+function printCheckedResult(info, results){
+  const grouped = {};
+  results.forEach(r => {
+    const key = `${r.term} — ${r.session}`;
+    if(!grouped[key]) grouped[key] = [];
+    grouped[key].push(r);
+  });
+  const sections = Object.keys(grouped).map(key => `
+    <h3>${esc(key)}</h3>
+    <table>
+      <tr><th>Subject</th><th>CA1</th><th>CA2</th><th>Exam</th><th>Total</th><th>Grade</th></tr>
+      ${grouped[key].map(r => `<tr><td>${esc(r.subject)}</td><td>${esc(r.ca1)}</td><td>${esc(r.ca2)}</td><td>${esc(r.exam)}</td><td>${esc(r.total)}</td><td>${esc(r.grade)}</td></tr>`).join("")}
+    </table>
+  `).join("");
+  openPrintWindow(`
+    <h2>${esc(info.name)} — ${esc(info.class || "")}</h2>
+    <p>Admission No: ${esc(info.admissionNo || "")}</p>
+    ${sections}
+  `);
+}
+</script>
 <script>
 function toggleMenu(){document.getElementById('nav').classList.toggle('show')}
 function openModal(type){
