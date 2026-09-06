@@ -2026,6 +2026,7 @@ function renderCBTTestsList(){
       <div style="font-size:12px;color:#666;margin-top:2px;">${(t.questions||[]).length} questions · ${esc(t.durationMinutes)} minutes</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
         ${t.status==='draft' ? `<button class="btn-primary" style="width:auto;" onclick="publishCBTTest('${t.id}')">Publish</button>` : `<button class="btn-secondary" style="width:auto;" onclick="unpublishCBTTest('${t.id}')">Unpublish</button>`}
+        ${t.status==='draft' ? `<button class="btn-secondary" style="width:auto;" onclick="openEditCBTTest('${t.id}')">Edit</button>` : ""}
         <button class="btn-secondary" style="width:auto;" onclick="viewCBTTestScores('${t.id}')">View Scores</button>
         <button class="btn-secondary" style="width:auto;color:#a31527;" onclick="deleteCBTTest('${t.id}')">Delete</button>
       </div>
@@ -2056,12 +2057,99 @@ function openCreateCBTTest(){
   `;
   updateCBTClassOptions();
 }
-function updateCBTClassOptions(){
+function updateCBTClassOptions(preselectClass, preselectSubject){
   const level = document.getElementById("cbtLevel").value;
   const classes = level === "primary" ? PRIMARY_CLASSES : SECONDARY_CLASSES;
   const subjects = level === "primary" ? PRIMARY_SUBJECTS : SECONDARY_SUBJECTS;
-  document.getElementById("cbtClass").innerHTML = classes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("");
-  document.getElementById("cbtSubject").innerHTML = subjects.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("");
+  document.getElementById("cbtClass").innerHTML = classes.map(c => `<option value="${esc(c)}" ${c===preselectClass?"selected":""}>${esc(c)}</option>`).join("");
+  document.getElementById("cbtSubject").innerHTML = subjects.map(s => `<option value="${esc(s)}" ${s===preselectSubject?"selected":""}>${esc(s)}</option>`).join("");
+}
+
+function openEditCBTTest(id){
+  const t = cbtTestsList.find(x => x.id === id);
+  if(!t){ alert("Test not found."); return; }
+  const main = document.getElementById("mainContent");
+  const levelOptions = cbtTestsContext === "general"
+    ? `<option value="primary" ${t.level==='primary'?'selected':''}>Primary</option><option value="secondary" ${t.level==='secondary'?'selected':''}>Secondary</option>`
+    : `<option value="${cbtTestsContext}">${cbtTestsContext[0].toUpperCase()+cbtTestsContext.slice(1)}</option>`;
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderCBTTestsList()">&larr; Back to CBT Tests</button>
+    <div class="section-title" style="margin-top:12px;">Edit CBT Test</div>
+    <div class="form-group"><label>Title</label><input type="text" id="cbtTitle" value="${esc(t.title||"").replace(/"/g,"&quot;")}"></div>
+    <div class="form-group"><label>Level</label><select id="cbtLevel" onchange="updateCBTClassOptions()">${levelOptions}</select></div>
+    <div class="form-group"><label>Class</label><select id="cbtClass"></select></div>
+    <div class="form-group"><label>Subject</label><select id="cbtSubject"></select></div>
+    <div class="form-group"><label>Term</label><select id="cbtTerm">${TERMS.map(term => `<option value="${esc(term)}" ${term===t.term?"selected":""}>${esc(term)}</option>`).join("")}</select></div>
+    <div class="form-group"><label>Session</label><input type="text" id="cbtSession" value="${esc(t.session||"")}"></div>
+    <div class="form-group"><label>Duration (minutes)</label><input type="number" id="cbtDuration" value="${esc(t.durationMinutes||30)}" min="1"></div>
+    <div class="form-group"><label>Number of Questions</label><input type="number" id="cbtNumQuestions" value="${(t.questions||[]).length}" min="1"></div>
+    <div class="signup-note">Saving will re-pick questions at random from the Question Bank matching the class and subject above — this replaces the questions currently on this test. Only draft tests (no attempts yet) can be edited.</div>
+    <div class="field-error" id="cbtCreateError"></div>
+    <button class="btn-primary" id="cbtCreateBtn" onclick="submitEditCBTTest('${id}')">Save Changes</button>
+    <button class="btn-secondary" onclick="renderCBTTestsList()">Cancel</button>
+  `;
+  updateCBTClassOptions(t.class, t.subject);
+}
+
+async function submitEditCBTTest(id){
+  const title = document.getElementById("cbtTitle").value.trim();
+  const level = document.getElementById("cbtLevel").value;
+  const cls = document.getElementById("cbtClass").value;
+  const subject = document.getElementById("cbtSubject").value;
+  const term = document.getElementById("cbtTerm").value;
+  const session = document.getElementById("cbtSession").value.trim();
+  const durationMinutes = Number(document.getElementById("cbtDuration").value);
+  const numQuestions = Number(document.getElementById("cbtNumQuestions").value);
+  const errBox = document.getElementById("cbtCreateError");
+  const btn = document.getElementById("cbtCreateBtn");
+  errBox.textContent = "";
+
+  if(!title || !session || !durationMinutes || !numQuestions){
+    errBox.textContent = "Please fill in all fields.";
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = "Saving...";
+  try{
+    const freshDoc = await db.collection("cbtTests").doc(id).get();
+    if(!freshDoc.exists){ errBox.textContent = "This test no longer exists."; return; }
+    if(freshDoc.data().status !== "draft"){
+      errBox.textContent = "This test has already been published and can no longer be edited.";
+      return;
+    }
+
+    const snap = await db.collection("questionBank")
+      .where("level","==",level).where("class","==",cls).where("subject","==",subject)
+      .get();
+    let pool = [];
+    snap.forEach(doc => pool.push(doc.data()));
+
+    if(pool.length === 0){
+      errBox.textContent = "No questions found in the Question Bank for this class and subject.";
+      return;
+    }
+
+    for(let i = pool.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const selected = pool.slice(0, Math.min(numQuestions, pool.length))
+      .map(q => ({ questionText: q.questionText, options: q.options, correctIndex: q.correctIndex }));
+
+    await db.collection("cbtTests").doc(id).update({
+      title, level, class: cls, subject, term, session,
+      durationMinutes, questions: selected, updatedAt: new Date().toISOString()
+    });
+
+    if(selected.length < numQuestions){
+      alert(`Test saved with ${selected.length} question(s) — that's all that were available in the Question Bank for this class and subject.`);
+    }
+    openCBTTests(cbtTestsContext);
+  } catch(e){
+    errBox.textContent = "Error saving test: " + e.message;
+  } finally{
+    btn.disabled = false; btn.textContent = "Save Changes";
+  }
 }
 async function submitCreateCBTTest(){
   const title = document.getElementById("cbtTitle").value.trim();
