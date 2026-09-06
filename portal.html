@@ -1698,17 +1698,48 @@ async function loadMyQuestions(){
       area.innerHTML = `<div class="placeholder-note">You haven't added any questions yet.</div>`;
       return;
     }
-    area.innerHTML = questions.map(q => `
-      <div class="card" style="padding:12px;margin-bottom:8px;">
-        <div style="font-size:12px;color:#666;">${esc(q.subject)} · ${esc(q.class)}</div>
-        <div style="font-weight:600;margin-top:4px;">${esc(q.questionText)}</div>
-        <div style="font-size:13px;margin-top:6px;color:#0a7748;">Correct: ${esc(q.options[q.correctIndex] || "")}</div>
-        <button class="btn-secondary" style="width:auto;color:#a31527;margin-top:8px;" onclick="deleteQuestionFromBank('${q.id}')">Delete</button>
+    area.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:600;">
+          <input type="checkbox" id="qbSelectAll" onchange="toggleSelectAllQuestions()"> Select All
+        </label>
+        <button class="btn-secondary" style="width:auto;color:#a31527;" onclick="deleteSelectedQuestions()">Delete Selected</button>
       </div>
-    `).join("");
+      ${questions.map(q => `
+        <div class="card" style="padding:12px;margin-bottom:8px;">
+          <div style="display:flex;gap:10px;">
+            <input type="checkbox" class="qbQuestionCheck" value="${q.id}" style="margin-top:4px;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:12px;color:#666;">${esc(q.subject)} · ${esc(q.class)}</div>
+              <div style="font-weight:600;margin-top:4px;">${esc(q.questionText)}</div>
+              <div style="font-size:13px;margin-top:6px;color:#0a7748;">Correct: ${esc(q.options[q.correctIndex] || "")}</div>
+              <button class="btn-secondary" style="width:auto;color:#a31527;margin-top:8px;" onclick="deleteQuestionFromBank('${q.id}')">Delete</button>
+            </div>
+          </div>
+        </div>
+      `).join("")}
+    `;
   } catch(e){
     area.innerHTML = `<div class="field-error">Error loading questions: ${e.message}</div>`;
   }
+}
+function toggleSelectAllQuestions(){
+  const selectAll = document.getElementById("qbSelectAll");
+  document.querySelectorAll(".qbQuestionCheck").forEach(cb => { cb.checked = selectAll.checked; });
+}
+async function deleteSelectedQuestions(){
+  const checked = [...document.querySelectorAll(".qbQuestionCheck:checked")].map(cb => cb.value);
+  if(checked.length === 0){
+    alert("Select at least one question to delete.");
+    return;
+  }
+  if(!confirm(`Delete ${checked.length} selected question(s) from the bank? This cannot be undone.`)) return;
+  try{
+    const batch = db.batch();
+    checked.forEach(id => batch.delete(db.collection("questionBank").doc(id)));
+    await batch.commit();
+    loadMyQuestions();
+  } catch(e){ alert("Unable to delete selected questions: " + e.message); }
 }
 async function deleteQuestionFromBank(id){
   if(!confirm("Delete this question from the bank?")) return;
