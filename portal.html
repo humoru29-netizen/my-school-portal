@@ -3413,7 +3413,8 @@ function openEnterResults(){
       <label>Session</label>
       <input type="text" id="rSession" placeholder="e.g. 2025/2026">
     </div>
-    <button class="btn-primary" onclick="loadStudentsForResults()">Load Students</button>
+    </div>
+    <button class="btn-primary" style="width:auto;min-width:180px;" onclick="loadStudentsForResults()">Load Students</button>
     <div class="field-error" id="rError"></div>
     <div id="rResultsArea" style="margin-top:16px;"></div>
   `;
@@ -5062,13 +5063,13 @@ function openBulkAddStudents(){
         ${classOptionsHTML(lockedLevel)}
       </select>
     </div>
+    </div>
     <div class="form-group">
       <label>Student Names (one per line)</label>
-      <textarea id="bulkNames" rows="10" style="width:100%; padding:10px 12px; border:1px solid var(--gray-line); border-radius:8px; font-size:14px;" placeholder="Musa Ibrahim
+      <textarea id="bulkNames" rows="16" style="width:100%; min-height:320px; padding:10px 12px; border:1px solid var(--gray-line); border-radius:8px; font-size:14px; resize:vertical;" placeholder="Musa Ibrahim
 Amaka Obi
 Chidi Eze"></textarea>
       <small style="color:#666;">Each line becomes one student account. Usernames and passwords are generated automatically, same as single account creation.</small>
-    </div>
     </div>
     <button class="btn-primary" style="width:auto;min-width:180px;" onclick="submitBulkAddStudents()">Create Accounts</button>
     <div class="field-error" id="bulkError"></div>
