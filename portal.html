@@ -3561,8 +3561,9 @@ function openResultsApproval(context){
       </label>
       <div style="font-size:12px; color:#666; margin-top:6px;">"All Classes" applies Release / Hold to every class in this level for the chosen Term & Session.</div>
     </div>
+    </div>
 
-    <button class="btn-primary" onclick="loadResultsForApproval()">Load Class Results</button>
+    <button class="btn-primary" style="width:auto;min-width:180px;" onclick="loadResultsForApproval()">Load Class Results</button>
     <div class="field-error" id="aError"></div>
     <div id="aResultsArea" style="margin-top:16px;"></div>
   `;
@@ -5068,7 +5069,8 @@ Amaka Obi
 Chidi Eze"></textarea>
       <small style="color:#666;">Each line becomes one student account. Usernames and passwords are generated automatically, same as single account creation.</small>
     </div>
-    <button class="btn-primary" onclick="submitBulkAddStudents()">Create Accounts</button>
+    </div>
+    <button class="btn-primary" style="width:auto;min-width:180px;" onclick="submitBulkAddStudents()">Create Accounts</button>
     <div class="field-error" id="bulkError"></div>
     <div id="bulkProgressArea" style="margin-top:16px;"></div>
   `;
