@@ -2063,7 +2063,69 @@ function renderCBTTestsList(){
       </div>
     </div>
   `).join("") : `<div class="placeholder-note">No CBT tests yet.</div>`;
-  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">CBT Tests</div><button class="btn-primary" style="width:auto;margin-bottom:16px;" onclick="openCreateCBTTest()">+ Create New Test</button>${cards}`;
+  main.innerHTML = `<button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button><div class="section-title" style="margin-top:12px;">CBT Tests</div><button class="btn-primary" style="width:auto;margin-bottom:16px;" onclick="openCreateCBTTest()">+ Create New Test</button><div id="qbSummaryArea" style="margin-bottom:16px;"></div>${cards}`;
+  loadQuestionBankSummary();
+}
+async function loadQuestionBankSummary(){
+  const area = document.getElementById("qbSummaryArea");
+  if(!area) return;
+  area.innerHTML = `<div class="placeholder-note">Loading question bank counts...</div>`;
+  try{
+    const snap = await db.collection("questionBank").get();
+    let docs = [];
+    snap.forEach(doc => docs.push(doc.data()));
+    if(cbtTestsContext !== "general") docs = docs.filter(d => d.level === cbtTestsContext);
+
+    const counts = {};
+    docs.forEach(d => {
+      const cls = d.class || "(no class)";
+      const subj = d.subject || "(no subject)";
+      const key = cls + "||" + subj;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    const rows = Object.keys(counts).map(key => {
+      const [cls, subj] = key.split("||");
+      return { cls, subj, count: counts[key] };
+    }).sort((a,b) => a.cls.localeCompare(b.cls) || a.subj.localeCompare(b.subj));
+
+    if(!rows.length){
+      area.innerHTML = `
+        <div class="card" style="padding:12px;">
+          <div style="font-weight:700;margin-bottom:6px;">📊 Question Bank Summary</div>
+          <div class="placeholder-note">No questions in the bank yet.</div>
+        </div>`;
+      return;
+    }
+
+    area.innerHTML = `
+      <div class="card" style="padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+          <div style="font-weight:700;">📊 Question Bank Summary</div>
+          <div style="font-size:12px;color:#666;">${docs.length} total question${docs.length===1?"":"s"}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="text-align:left;border-bottom:1px solid #ddd;">
+              <th style="padding:6px 4px;">Class</th>
+              <th style="padding:6px 4px;">Subject</th>
+              <th style="padding:6px 4px;text-align:right;">Questions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr style="border-bottom:1px solid #f0e6c8;">
+                <td style="padding:6px 4px;">${esc(r.cls)}</td>
+                <td style="padding:6px 4px;">${esc(r.subj)}</td>
+                <td style="padding:6px 4px;text-align:right;">${r.count}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch(e){
+    area.innerHTML = `<div class="field-error">Error loading question bank summary: ${e.message}</div>`;
+  }
 }
 function openCreateCBTTest(){
   const main = document.getElementById("mainContent");
@@ -3413,8 +3475,7 @@ function openEnterResults(){
       <label>Session</label>
       <input type="text" id="rSession" placeholder="e.g. 2025/2026">
     </div>
-    </div>
-    <button class="btn-primary" style="width:auto;min-width:180px;" onclick="loadStudentsForResults()">Load Students</button>
+    <button class="btn-primary" onclick="loadStudentsForResults()">Load Students</button>
     <div class="field-error" id="rError"></div>
     <div id="rResultsArea" style="margin-top:16px;"></div>
   `;
@@ -5063,13 +5124,13 @@ function openBulkAddStudents(){
         ${classOptionsHTML(lockedLevel)}
       </select>
     </div>
-    </div>
     <div class="form-group">
       <label>Student Names (one per line)</label>
-      <textarea id="bulkNames" rows="16" style="width:100%; min-height:320px; padding:10px 12px; border:1px solid var(--gray-line); border-radius:8px; font-size:14px; resize:vertical;" placeholder="Musa Ibrahim
+      <textarea id="bulkNames" rows="10" style="width:100%; padding:10px 12px; border:1px solid var(--gray-line); border-radius:8px; font-size:14px;" placeholder="Musa Ibrahim
 Amaka Obi
 Chidi Eze"></textarea>
       <small style="color:#666;">Each line becomes one student account. Usernames and passwords are generated automatically, same as single account creation.</small>
+    </div>
     </div>
     <button class="btn-primary" style="width:auto;min-width:180px;" onclick="submitBulkAddStudents()">Create Accounts</button>
     <div class="field-error" id="bulkError"></div>
