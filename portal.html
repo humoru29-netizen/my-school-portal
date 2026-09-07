@@ -2927,6 +2927,10 @@ function levelAdminTiles(level){
         <div class="icon">🔑</div>
         <div class="label">Generate/Refresh PINs</div>
       </div>
+      <div class="tile" onclick="openManageTimetable('${lvl}')">
+        <div class="icon">🗓️</div>
+        <div class="label">Manage Timetable</div>
+      </div>
       <div class="tile" onclick="openFixAdmissionSessions('${lvl}')">
         <div class="icon">🛠️</div>
         <div class="label">Fix Admission No. Sessions</div>
@@ -2969,7 +2973,10 @@ function renderStudent(){
   return `
     <div class="section-title">Student Dashboard — ${currentProfile.level || ""}</div>
     <div class="card-grid">
-      ${tile("🗓️","Timetable")}
+      <div class="tile" onclick="openStudentTimetable()">
+        <div class="icon">🗓️</div>
+        <div class="label">Timetable</div>
+      </div>
       ${tile("📚","Assignments")}
       <div class="tile" onclick="openStudentResults()">
         <div class="icon">📝</div>
@@ -3013,6 +3020,183 @@ function renderCashier(){
       </div>
     </div>
   `;
+}
+
+function timetableDocId(level, cls){
+  const clean = s => String(s).trim().replace(/[^a-zA-Z0-9]+/g, "_");
+  return `${clean(level)}_${clean(cls)}`;
+}
+
+const TIMETABLE_DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday"];
+
+function openManageTimetable(level){
+  const main = document.getElementById("mainContent");
+  const classList = classListForLevel(level);
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
+    <div class="section-title" style="margin-top:12px;">Manage Timetable</div>
+    <div class="form-group">
+      <label>Class</label>
+      <select id="ttClass" onchange="loadTimetableForClass('${level}')">
+        <option value="">-- Select Class --</option>
+        ${classList.map(c => `<option value="${c}">${c}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field-error" id="ttError"></div>
+    <div id="ttEditorArea"></div>
+  `;
+}
+
+let currentTimetableRows = []; // [{ time, Monday:"", Tuesday:"", ... }]
+
+async function loadTimetableForClass(level){
+  const cls = document.getElementById("ttClass").value;
+  const errBox = document.getElementById("ttError");
+  const area = document.getElementById("ttEditorArea");
+  errBox.textContent = "";
+  if(!cls){ area.innerHTML = ""; return; }
+
+  area.innerHTML = `<div class="placeholder-note">Loading timetable...</div>`;
+  try{
+    const docId = timetableDocId(level, cls);
+    const doc = await db.collection("timetables").doc(docId).get();
+    if(doc.exists && Array.isArray(doc.data().rows) && doc.data().rows.length){
+      currentTimetableRows = doc.data().rows;
+    } else {
+      currentTimetableRows = [
+        { time: "8:00 - 8:40" }, { time: "8:40 - 9:20" }, { time: "9:20 - 10:00" },
+        { time: "10:00 - 10:40" }, { time: "10:40 - 11:00 (Break)" },
+        { time: "11:00 - 11:40" }, { time: "11:40 - 12:20" }, { time: "12:20 - 1:00" }
+      ].map(r => { TIMETABLE_DAYS.forEach(d => r[d] = ""); return r; });
+    }
+    renderTimetableEditor(level, cls);
+  } catch(e){
+    area.innerHTML = "";
+    errBox.textContent = "Error loading timetable: " + e.message;
+  }
+}
+
+function renderTimetableEditor(level, cls){
+  const area = document.getElementById("ttEditorArea");
+  area.innerHTML = `
+    <div style="overflow-x:auto; margin-top:12px;">
+      <table style="border-collapse:collapse; width:100%; min-width:700px; font-size:13px;">
+        <thead>
+          <tr style="background:#f5efe0;">
+            <th style="border:1px solid var(--gray-line); padding:6px;">Time</th>
+            ${TIMETABLE_DAYS.map(d => `<th style="border:1px solid var(--gray-line); padding:6px;">${d}</th>`).join("")}
+            <th style="border:1px solid var(--gray-line); padding:6px;"></th>
+          </tr>
+        </thead>
+        <tbody id="ttRowsBody">
+          ${currentTimetableRows.map((r,i) => renderTimetableRow(r,i)).join("")}
+        </tbody>
+      </table>
+    </div>
+    <button class="btn-secondary" style="width:auto;margin-top:10px;" onclick="addTimetableRow()">+ Add Period Row</button>
+    <button class="btn-primary" style="width:auto;margin-top:10px;margin-left:8px;" onclick="saveTimetable('${level}','${cls}')">Save Timetable</button>
+    <div class="field-error" id="ttSaveError"></div>
+  `;
+}
+
+function renderTimetableRow(r, i){
+  return `
+    <tr id="ttRow_${i}">
+      <td style="border:1px solid var(--gray-line); padding:4px;">
+        <input type="text" value="${esc(r.time || "")}" style="width:100%;border:none;font-size:13px;" onchange="updateTimetableCell(${i},'time',this.value)">
+      </td>
+      ${TIMETABLE_DAYS.map(d => `
+        <td style="border:1px solid var(--gray-line); padding:4px;">
+          <input type="text" value="${esc(r[d] || "")}" placeholder="Subject" style="width:100%;border:none;font-size:13px;" onchange="updateTimetableCell(${i},'${d}',this.value)">
+        </td>
+      `).join("")}
+      <td style="border:1px solid var(--gray-line); padding:4px; text-align:center;">
+        <button class="btn-secondary" style="width:auto;margin:0;color:#b00020;font-size:12px;padding:4px 8px;" onclick="removeTimetableRow(${i})">✕</button>
+      </td>
+    </tr>
+  `;
+}
+
+function updateTimetableCell(i, field, value){
+  if(currentTimetableRows[i]) currentTimetableRows[i][field] = value;
+}
+
+function addTimetableRow(){
+  const row = { time: "" };
+  TIMETABLE_DAYS.forEach(d => row[d] = "");
+  currentTimetableRows.push(row);
+  const tbody = document.getElementById("ttRowsBody");
+  tbody.insertAdjacentHTML("beforeend", renderTimetableRow(row, currentTimetableRows.length - 1));
+}
+
+function removeTimetableRow(i){
+  currentTimetableRows.splice(i, 1);
+  const cls = document.getElementById("ttClass").value;
+  const tbody = document.getElementById("ttRowsBody");
+  if(tbody) tbody.innerHTML = currentTimetableRows.map((r,idx) => renderTimetableRow(r, idx)).join("");
+}
+
+async function saveTimetable(level, cls){
+  const errBox = document.getElementById("ttSaveError");
+  errBox.textContent = "";
+  try{
+    const docId = timetableDocId(level, cls);
+    await db.collection("timetables").doc(docId).set({
+      level, class: cls, days: TIMETABLE_DAYS, rows: currentTimetableRows,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    errBox.style.color = "green";
+    errBox.textContent = "Timetable saved.";
+  } catch(e){
+    errBox.style.color = "";
+    errBox.textContent = "Error saving timetable: " + e.message;
+  }
+}
+
+async function openStudentTimetable(){
+  const main = document.getElementById("mainContent");
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
+    <div class="section-title" style="margin-top:12px;">Timetable — ${esc(currentProfile.class || "")}</div>
+    <div id="studentTtArea"><div class="placeholder-note">Loading timetable...</div></div>
+  `;
+  const area = document.getElementById("studentTtArea");
+  if(!currentProfile.class){
+    area.innerHTML = `<div class="placeholder-note">No class assigned yet — contact your school admin.</div>`;
+    return;
+  }
+  try{
+    const level = (currentProfile.level || "").toLowerCase();
+    const docId = timetableDocId(level, currentProfile.class);
+    const doc = await db.collection("timetables").doc(docId).get();
+    if(!doc.exists || !Array.isArray(doc.data().rows) || !doc.data().rows.length){
+      area.innerHTML = `<div class="placeholder-note">Timetable has not been set up for your class yet.</div>`;
+      return;
+    }
+    const rows = doc.data().rows;
+    area.innerHTML = `
+      <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse; width:100%; min-width:700px; font-size:13px;">
+          <thead>
+            <tr style="background:#f5efe0;">
+              <th style="border:1px solid var(--gray-line); padding:6px;">Time</th>
+              ${TIMETABLE_DAYS.map(d => `<th style="border:1px solid var(--gray-line); padding:6px;">${d}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td style="border:1px solid var(--gray-line); padding:6px; font-weight:600;">${esc(r.time || "")}</td>
+                ${TIMETABLE_DAYS.map(d => `<td style="border:1px solid var(--gray-line); padding:6px;">${esc(r[d] || "")}</td>`).join("")}
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } catch(e){
+    area.innerHTML = `<div class="field-error">Error loading timetable: ${e.message}</div>`;
+  }
 }
 
 function tile(icon, label){
@@ -3450,15 +3634,6 @@ function openEnterResults(){
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">Enter Results</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
     <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="rClass">${myClasses.map(c => `<option value="${c}">${c}</option>`).join("")}</select>
@@ -4316,15 +4491,6 @@ function openFeeManager(context){
     <div class="section-title" style="margin-top:12px;">Fee Records</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
     <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="fClass">${classList.map(c => `<option value="${c}">${c}</option>`).join("")}</select>
     </div>
@@ -5109,15 +5275,6 @@ function openBulkAddStudents(){
     <div class="section-title" style="margin-top:12px;">Add Students in Bulk</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
     <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="bulkClass">
         <option value="">Select class...</option>
@@ -5743,15 +5900,6 @@ function openCAList(level){
     <div class="section-title" style="margin-top:12px;">CA List</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
     <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="caClass">${classList.map(c => `<option value="${c}">${c}</option>`).join("")}</select>
     </div>
@@ -5866,15 +6014,6 @@ function openClassCAList(level){
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">CA List — Whole Class</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
     <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="ccClass" onchange="resetClassCAList()">${classList.map(c => `<option value="${c}">${c}</option>`).join("")}</select>
@@ -6031,15 +6170,6 @@ function openReportCards(level){
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">Report Cards</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
     <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="rcClass" onchange="resetReportCardResults()">${classList.map(c => `<option value="${c}">${c}</option>`).join("")}</select>
@@ -6345,15 +6475,6 @@ function openStudentRoster(level){
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">Student Roster</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
     <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="rosterClass">
@@ -7122,15 +7243,6 @@ function openMasterList(level){
     <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
     <div class="section-title" style="margin-top:12px;">Master List</div>
     <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px;">
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Session (dropdown attached)</label>
-      <input type="text" id="aSession" value="${defaultSession || ""}" placeholder="e.g. 2025/2026" list="sessionList">
-      <datalist id="sessionList"><option value="2024/2025"><option value="2025/2026"><option value="2026/2027"></datalist>
-    </div>
-    <div class="form-group" style="margin-bottom:0;">
-      <label>Term (dropdown attached)</label>
-      <select id="aTerm">${TERMS.map(t => `<option value="${t}">${t}</option>`).join("")}</select>
-    </div>
     <div class="form-group" style="margin-bottom:0;">
       <label>Class (dropdown attached)</label>
       <select id="mlClass" onchange="resetMasterList()">${classList.map(c => `<option value="${c}">${c}</option>`).join("")}</select>
