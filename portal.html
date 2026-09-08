@@ -815,14 +815,22 @@ function resultLookupId(admissionNo, pin){
   return `${clean(admissionNo)}_${clean(pin)}`;
 }
 
-// Auto-generates the next Admission Number in sequence, scoped to the
-// current academic session, in the format FISS/YYYY/YYYY/NNNNN
+// Auto-generates the next Admission Number in sequence, scoped to a
+// given academic session, in the format FISS/YYYY/YYYY/NNNNN
 // (e.g. FISS/2025/2026/00002). Uses a Firestore transaction against a
 // counters/admissionNumbers document so two students created back-to-back
 // — even from different phones at the same moment — can never collide
 // on the same number.
-async function generateNextAdmissionNo(){
-  const session = defaultSession && defaultSession.trim() ? defaultSession.trim() : "0000/0000";
+//
+// sessionOverride is optional: pass a specific session (e.g. "2023/2024")
+// to backdate numbers for students who joined in an earlier session —
+// each session keeps its own independent 00001... counter. Leave it out
+// to use the live current session from Portal Settings, which is what
+// every normal new-admission flow (Create Account, Admissions accept)
+// does.
+async function generateNextAdmissionNo(sessionOverride){
+  const raw = sessionOverride && sessionOverride.trim() ? sessionOverride.trim() : defaultSession;
+  const session = raw && raw.trim() ? raw.trim() : "0000/0000";
   const counterId = session.replace(/\//g, "-"); // Firestore doc IDs can't contain "/"
   const counterRef = db.collection("counters").doc("admissionNumbers_" + counterId);
 
@@ -2750,6 +2758,10 @@ function renderGeneralAdmin(view){
           <div class="icon">🆔</div>
           <div class="label">Assign Admission Numbers</div>
         </div>
+        <div class="tile" onclick="openClearAdmissionNumbers('both')">
+          <div class="icon">🧹</div>
+          <div class="label">Clear Admission Numbers</div>
+        </div>
         <div class="tile" onclick="openBulkGeneratePins('both')">
           <div class="icon">🔑</div>
           <div class="label">Generate/Refresh PINs</div>
@@ -2922,6 +2934,10 @@ function levelAdminTiles(level){
       <div class="tile" onclick="openBulkAssignAdmissionNumbers('${lvl}')">
         <div class="icon">🆔</div>
         <div class="label">Assign Admission Numbers</div>
+      </div>
+      <div class="tile" onclick="openClearAdmissionNumbers('${lvl}')">
+        <div class="icon">🧹</div>
+        <div class="label">Clear Admission Numbers</div>
       </div>
       <div class="tile" onclick="openBulkGeneratePins('${lvl}')">
         <div class="icon">🔑</div>
@@ -6634,6 +6650,11 @@ function openBulkAssignAdmissionNumbers(level){
         ${classList.map(c => `<option value="${c}">${c}</option>`).join("")}
       </select>
     </div>
+    <div class="form-group">
+      <label>Session for these numbers</label>
+      <input type="text" id="bulkAdmSession" value="${esc(defaultSession || "")}" placeholder="e.g. 2025/2026">
+      <div class="signup-note">Defaults to the current session. To backdate old students (e.g. a senior class that joined before the portal existed), pick that class above and change this to the session they actually joined — e.g. 2023/2024 — before running. Each session gets its own independent 00001 count, so this never clashes with new admissions.</div>
+    </div>
     <button class="btn-primary" style="margin-top:12px;" onclick="runBulkAssignAdmissionNumbers('${level}')">Assign Admission Numbers Now</button>
     <div class="field-error" id="bulkAdmError"></div>
     <div id="bulkAdmResultsArea" style="margin-top:16px;"></div>
@@ -6644,6 +6665,7 @@ async function runBulkAssignAdmissionNumbers(level){
   const errBox = document.getElementById("bulkAdmError");
   const area = document.getElementById("bulkAdmResultsArea");
   const classFilter = document.getElementById("bulkAdmClass").value;
+  const sessionField = document.getElementById("bulkAdmSession").value.trim();
   errBox.textContent = "";
   area.innerHTML = `<div class="placeholder-note">Working through student list...</div>`;
 
@@ -6660,7 +6682,7 @@ async function runBulkAssignAdmissionNumbers(level){
     const needsAdmission = students.filter(s => !s.admissionNo);
     const assigned = [];
     for(const s of needsAdmission){
-      const admissionNo = await generateNextAdmissionNo();
+      const admissionNo = await generateNextAdmissionNo(sessionField);
       await db.collection("users").doc(s.uid).update({ admissionNo });
       assigned.push({ ...s, admissionNo });
     }
@@ -6671,7 +6693,7 @@ async function runBulkAssignAdmissionNumbers(level){
 
     area.innerHTML = `
       <div class="section-title">Done</div>
-      <div style="margin-bottom:8px;">✅ ${assigned.length} student${assigned.length === 1 ? "" : "s"} assigned an Admission Number${classFilter ? ` in ${esc(classFilter)}` : ""}.</div>
+      <div style="margin-bottom:8px;">✅ ${assigned.length} student${assigned.length === 1 ? "" : "s"} assigned an Admission Number for session ${esc(sessionField || defaultSession || "current")}${classFilter ? ` in ${esc(classFilter)}` : ""}.</div>
       <div style="margin-bottom:8px;">ℹ️ ${students.length - assigned.length} student${(students.length - assigned.length) === 1 ? "" : "s"} already had one — left unchanged.</div>
       ${assigned.length > 0 ? `
         <div style="overflow-x:auto; margin-top:12px;">
@@ -6689,6 +6711,110 @@ async function runBulkAssignAdmissionNumbers(level){
     `;
   } catch(e){
     errBox.textContent = "Error assigning admission numbers: " + e.message;
+  }
+}
+
+/* ================= CLEAR ADMISSION NUMBERS (TEST-RUN UNDO) =================
+   Undoes a test run of Assign Admission Numbers. Scoped to ONE class at a
+   time on purpose — no "All Classes" option here, since this is
+   destructive. For every student in that class who has an Admission
+   Number, it: removes the admissionNo field, and deletes their
+   resultLookup entry (if any) so "Check My Result" never points at a
+   number that no longer exists. Result PINs themselves are left alone —
+   they're simply skipped by every PIN tool until the student has an
+   Admission Number again.
+   Optionally also resets a session's counter back to 0, so the next
+   real Assign Admission Numbers run for that session starts at 00001
+   instead of continuing where the test run left off.
+*/
+function openClearAdmissionNumbers(level){
+  const main = document.getElementById("mainContent");
+  const classList = classListForLevel(level);
+  main.innerHTML = `
+    <button class="btn-secondary" onclick="renderDashboard()">&larr; Back to Dashboard</button>
+    <div class="section-title" style="margin-top:12px;">Clear Admission Numbers</div>
+    <div class="placeholder-note">Use this to undo a test run. Removes the Admission Number from every student in the class you pick below. This cannot be undone — double-check the class before running.</div>
+    <div class="form-group">
+      <label>Class</label>
+      <select id="clearAdmClass">
+        <option value="">— Select a class —</option>
+        ${classList.map(c => `<option value="${c}">${c}</option>`).join("")}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Also reset counter for session (optional)</label>
+      <input type="text" id="clearAdmSession" value="" placeholder="e.g. 2025/2026">
+      <div class="signup-note">Leave blank to just clear the students' numbers. Fill this in with the exact session those test numbers were generated under, and its counter resets to 0 — so the next real run starts fresh at 00001 instead of continuing the count.</div>
+    </div>
+    <button class="btn-primary" style="margin-top:12px;" onclick="runClearAdmissionNumbers('${level}')">Clear Admission Numbers Now</button>
+    <div class="field-error" id="clearAdmError"></div>
+    <div id="clearAdmResultsArea" style="margin-top:16px;"></div>
+  `;
+}
+
+async function runClearAdmissionNumbers(level){
+  const errBox = document.getElementById("clearAdmError");
+  const area = document.getElementById("clearAdmResultsArea");
+  const classFilter = document.getElementById("clearAdmClass").value;
+  const sessionField = document.getElementById("clearAdmSession").value.trim();
+  errBox.textContent = "";
+
+  if(!classFilter){
+    errBox.textContent = "Please select a class — this tool doesn't run across all classes at once.";
+    return;
+  }
+  if(!confirm(`Remove the Admission Number from every student in ${classFilter}${sessionField ? `, and reset the ${sessionField} counter to 0` : ""}?\n\nThis cannot be undone.`)) return;
+
+  area.innerHTML = `<div class="placeholder-note">Working through student list...</div>`;
+
+  try{
+    let query = db.collection("users").where("role","==","student");
+    if(level !== "both") query = query.where("level","==",level);
+    const snap = await query.get();
+
+    let students = [];
+    snap.forEach(doc => students.push({ uid: doc.id, ...doc.data() }));
+    students = dedupStudentsByUid(students);
+    students = students.filter(s => s.class === classFilter && s.admissionNo);
+
+    const cleared = [];
+    for(const s of students){
+      await db.collection("users").doc(s.uid).update({ admissionNo: firebase.firestore.FieldValue.delete() });
+      if(s.resultPin){
+        await db.collection("resultLookup").doc(resultLookupId(s.admissionNo, s.resultPin)).delete().catch(() => {});
+      }
+      cleared.push(s);
+    }
+
+    let counterResetMsg = "";
+    if(sessionField){
+      const counterId = sessionField.replace(/\//g, "-");
+      await db.collection("counters").doc("admissionNumbers_" + counterId).set({ lastNumber: 0, session: sessionField }, { merge: true });
+      counterResetMsg = ` The ${esc(sessionField)} counter was reset to 0.`;
+    }
+
+    const rowsHTML = cleared.map(s => `
+      <tr><td>${esc(s.name || "")}</td><td>${esc(s.admissionNo)}</td></tr>
+    `).join("");
+
+    area.innerHTML = `
+      <div class="section-title">Done</div>
+      <div style="margin-bottom:8px;">✅ ${cleared.length} student${cleared.length === 1 ? "" : "s"} in ${esc(classFilter)} cleared.${counterResetMsg}</div>
+      ${cleared.length > 0 ? `
+        <div style="overflow-x:auto; margin-top:12px;">
+          <table style="width:100%; border-collapse:collapse;">
+            <tr style="border-bottom:2px solid var(--gray-line);">
+              <th style="text-align:left; padding:6px;">Name</th>
+              <th style="text-align:left; padding:6px;">Old Admission No. (removed)</th>
+            </tr>
+            ${rowsHTML}
+          </table>
+        </div>
+        <div style="margin-top:12px; color:#666; font-size:13px;">Use "Assign Admission Numbers" to give this class fresh numbers.</div>
+      ` : ""}
+    `;
+  } catch(e){
+    errBox.textContent = "Error clearing admission numbers: " + e.message;
   }
 }
 
