@@ -3122,6 +3122,7 @@ function renderTimetableEditor(level, cls){
     </div>
     <button class="btn-secondary" style="width:auto;margin-top:10px;" onclick="addTimetableRow()">+ Add Period Row</button>
     <button class="btn-primary" style="width:auto;margin-top:10px;margin-left:8px;" onclick="saveTimetable('${level}','${cls}')">Save Timetable</button>
+    <button class="btn-secondary" style="width:auto;margin-top:10px;margin-left:8px;" onclick="printTimetable('${esc(cls)}')">🖨️ Print Timetable</button>
     <div class="field-error" id="ttSaveError"></div>
   `;
 }
@@ -3178,6 +3179,38 @@ async function saveTimetable(level, cls){
     errBox.style.color = "";
     errBox.textContent = "Error saving timetable: " + e.message;
   }
+}
+
+function printTimetable(cls){
+  const rowsHTML = currentTimetableRows.map(r => {
+    const isBreak = /break/i.test(r.time || "");
+    return `
+      <tr${isBreak ? ' style="background:#f5efe0;font-weight:700;"' : ""}>
+        <td>${esc(r.time || "")}</td>
+        ${TIMETABLE_DAYS.map(d => `<td>${esc(r[d] || "")}</td>`).join("")}
+      </tr>
+    `;
+  }).join("");
+
+  openPrintWindow(`
+    <div style="text-align:center;margin-bottom:16px;">
+      <h2 style="margin:0;">Faith International School, Itobe</h2>
+      <div style="font-style:italic;">"In God We Trust"</div>
+      <h3 style="margin:10px 0 0;">${esc(currentTimetableTitle || "Class Timetable")}</h3>
+      <div style="margin-top:2px;">${esc(cls || "")}</div>
+    </div>
+    <style>
+      @media print{ @page{ size: landscape; } }
+      table{ font-size:12px; }
+    </style>
+    <table>
+      <tr>
+        <th>Time</th>
+        ${TIMETABLE_DAYS.map(d => `<th>${d}</th>`).join("")}
+      </tr>
+      ${rowsHTML}
+    </table>
+  `);
 }
 
 async function openStudentTimetable(){
